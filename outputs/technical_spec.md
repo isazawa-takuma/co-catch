@@ -1,0 +1,536 @@
+# コキャッチ 技術仕様書
+
+## 1. 概要
+
+本ドキュメントは、オペナビ向け顧客管理機能の技術仕様をまとめたものです。
+
+- 対象サービス: オペナビ
+- アプリ名: コキャッチ
+- フレームワーク: Laravel 9
+- PHP: 8.1
+- DB: MySQL 8.0
+- ローカル実行: Laravel Sail + Docker Desktop
+- 実装ディレクトリ: `app/`
+- 要件定義書: `outputs/customer_management_requirements_draft.md`
+
+トップ画面はサービス選択のみを担い、オペナビと送客は別サービスとして扱います。初期版ではオペナビのみ実装し、送客は準備中表示とします。将来の送客機能は、トップだけ共通化し、データ・画面・DBテーブルはサービス別に分ける方針です。
+
+## 2. Laravel 構成
+
+| 種別 | パス | 役割 |
+|---|---|---|
+| ルーティング | `app/routes/web.php` | トップ、一覧、詳細、CSVインポート、履歴登録などのWebルート |
+| コントローラー | `app/app/Http/Controllers/HomeController.php` | トップ画面 |
+| コントローラー | `app/app/Http/Controllers/DashboardController.php` | 営業ダッシュボード |
+| コントローラー | `app/app/Http/Controllers/CustomerController.php` | 顧客一覧、詳細、更新、削除、CSVインポート、架電・対応履歴のHTTP入出力 |
+| FormRequest | `app/app/Http/Requests/CustomerUpdateRequest.php` | 顧客更新バリデーション |
+| FormRequest | `app/app/Http/Requests/CustomerImportRequest.php` | CSVインポートバリデーション |
+| FormRequest | `app/app/Http/Requests/ActivitySaveRequest.php` | 架電・対応履歴の登録・更新バリデーション |
+| サービス | `app/app/Services/Opnavi/CustomerService.php` | 顧客更新時の補完処理 |
+| サービス | `app/app/Services/Opnavi/CustomerQueryService.php` | 一覧検索、並び替え、ページネーション、選択肢取得 |
+| サービス | `app/app/Services/Opnavi/CustomerImportService.php` | CSV読込、検証、重複判定、OTAリンク解析、保存 |
+| サービス | `app/app/Services/Opnavi/CustomerActivityService.php` | 架電・対応履歴の登録・更新、最新履歴からの顧客ステータス同期 |
+| モデル | `app/app/Models/Customer.php` | オペナビ顧客 |
+| モデル | `app/app/Models/OtaLink.php` | OTAリンク |
+| モデル | `app/app/Models/Activity.php` | 架電・対応履歴 |
+| モデル | `app/app/Models/User.php` | 担当者ユーザー |
+| マイグレーション | `app/database/migrations/*opnavi*.php` | オペナビ用DBテーブル定義 |
+| ビュー | `app/resources/views/home.blade.php` | トップ画面 |
+| ビュー | `app/resources/views/dashboard.blade.php` | 営業ダッシュボード |
+| ビュー | `app/resources/views/customers/index.blade.php` | 顧客一覧 |
+| ビュー | `app/resources/views/customers/show.blade.php` | 詳細画面 |
+| ビュー | `app/resources/views/customers/_detail.blade.php` | サイドモーダル内の詳細表示 |
+| レイアウト | `app/resources/views/components/layouts/app.blade.php` | 共通レイアウト、オペナビ配下のサイドバー |
+| ページネーション | `app/resources/views/pagination/default.blade.php` | 一覧のページネーション表示 |
+| CSS | `app/public/css/app.css` | 画面スタイル |
+| JavaScript | `app/public/js/app.js` | サイドバー、コピー、サイドモーダル、CSVインポートモーダルなどの画面操作 |
+| 画像 | `app/public/images/external-link.png` | 別タブ詳細リンクのアイコン |
+| CSVテンプレート | `app/public/templates/opnavi_import_template.csv` | インポート用テンプレート |
+| Docker | `app/docker-compose.yml` | Sail / MySQL のローカル構成 |
+| ローカル手順 | `app/LOCAL_SETUP.md` | 起動・停止・トラブルシュート |
+
+コントローラーはHTTPリクエスト、レスポンス、リダイレクトの調整を主責務とします。CSVインポート、検索条件、履歴同期などの業務ロジックはサービス層へ分離し、バリデーションはFormRequestへ分離します。
+
+Blade内に直接JavaScriptを書かず、画面操作用のJavaScriptは `app/public/js/app.js` に分離します。現時点ではビルドなしで動かせる構成を優先し、Vite管理への移行はnpm環境を整えるタイミングで再検討します。
+
+## 3. ローカル起動方法
+
+初回起動:
+
+```bash
+cd app
+cp .env.example .env
+./vendor/bin/sail up -d
+./vendor/bin/sail artisan migrate --seed
+```
+
+ブラウザ:
+
+```text
+http://localhost:8080
+```
+
+停止:
+
+```bash
+cd app
+./vendor/bin/sail down
+```
+
+主な環境変数:
+
+| キー | 値 | 説明 |
+|---|---:|---|
+| `APP_PORT` | `8080` | ローカルWebポート |
+| `FORWARD_DB_PORT` | `3307` | ホスト側MySQLポート |
+| `DB_CONNECTION` | `mysql` | DB接続 |
+| `DB_HOST` | `mysql` | Docker Compose上のMySQLホスト名 |
+| `DB_PORT` | `3306` | コンテナ内MySQLポート |
+| `DB_DATABASE` | `opnavi_crm` | DB名 |
+| `DB_USERNAME` | `sail` | DBユーザー |
+| `DB_PASSWORD` | `password` | DBパスワード |
+
+`opnavi_customers` が存在しないエラーが出た場合は、マイグレーション未実行が原因です。
+
+```bash
+cd app
+./vendor/bin/sail artisan migrate --seed
+```
+
+開発環境でデータを消してよい場合のみ、以下でDBを作り直せます。
+
+```bash
+cd app
+./vendor/bin/sail artisan migrate:fresh --seed
+```
+
+## 4. テスト方針
+
+Laravelのテストは `app/tests` 配下で管理します。
+
+- Unitテスト: 小さな関数やサービス単位の確認
+- Featureテスト: HTTPリクエストを通して、画面・フォーム送信・DB更新まで含めた振る舞いを確認
+
+現時点ではFeatureテストを中心に追加しています。これは顧客管理画面の主要操作が、ルート、FormRequest、サービス層、DB保存まで連動しているためです。
+
+テスト実行:
+
+```bash
+cd app
+php artisan test
+```
+
+テスト環境では `phpunit.xml` でSQLiteインメモリDBを使います。本番・ローカル開発用のMySQLデータは汚しません。
+
+追加済みFeatureテスト:
+
+| テスト | 確認内容 |
+|---|---|
+| `CustomerListTest` | 都道府県・担当者の絞り込み、一覧上の担当者即保存後に一覧へ戻ること |
+| `CustomerListTest` | 選択した顧客の担当者を一括更新でき、未選択時はエラーになること |
+| `CustomerActivityTest` | 架電・対応履歴登録後に顧客ステータス、最終アクション日、最終メモが同期されること |
+| `CustomerImportTest` | CSVインポートで顧客・OTAリンクが作成され、営業日数12日未満の行がスキップされること |
+
+## 5. 画面ルーティング
+
+| メソッド | パス | ルート名 | 処理 | 用途 |
+|---|---|---|---|---|
+| `GET` | `/` | `home` | `HomeController@index` | トップ画面 |
+| `GET` | `/opnavi` | `opnavi` | redirect | オペナビ一覧へ遷移 |
+| `GET` | `/opnavi/dashboard` | `dashboard` | `DashboardController@index` | 営業ダッシュボード |
+| `GET` | `/opnavi/customers` | `customers.index` | `CustomerController@index` | 顧客一覧 |
+| `PATCH` | `/opnavi/customers/bulk-owner` | `customers.bulk-owner` | `CustomerController@bulkUpdateOwner` | 選択顧客の担当者一括設定 |
+| `POST` | `/opnavi/customers/import` | `customers.import` | `CustomerController@import` | CSVインポート |
+| `GET` | `/opnavi/customers/{customer}` | `customers.show` | `CustomerController@show` | 詳細画面 |
+| `PATCH` | `/opnavi/customers/{customer}` | `customers.update` | `CustomerController@update` | 顧客基本情報更新 |
+| `DELETE` | `/opnavi/customers/{customer}` | `customers.destroy` | `CustomerController@destroy` | 顧客削除 |
+| `POST` | `/opnavi/customers/{customer}/activities` | `customers.activities.store` | `CustomerController@storeActivity` | 架電・対応履歴登録 |
+| `PATCH` | `/opnavi/customers/{customer}/activities/{activity}` | `customers.activities.update` | `CustomerController@updateActivity` | 架電・対応履歴のメモ更新 |
+
+詳細画面は2つの表示形式があります。
+
+- 通常アクセス: `/opnavi/customers/{id}` で詳細画面を1画面表示
+- 一覧サイドモーダル: `/opnavi/customers/{id}?modal=1` をAjaxで取得し、部分テンプレートを表示
+
+`?modal=1` が付いていても、Ajaxではない通常アクセスの場合はフルレイアウトで表示します。これにより、履歴登録後などにCSSが当たらない部分HTMLだけの画面へ遷移しないようにしています。
+
+## 6. DBテーブル
+
+### 5.1 `users`
+
+担当者を管理するテーブルです。初期版ではログイン機能は未実装ですが、担当者選択のために利用します。
+
+| カラム | 型 | NULL | 説明 |
+|---|---|---:|---|
+| `id` | bigint | no | 主キー |
+| `name` | string | no | 担当者名 |
+| `email` | string unique | no | メールアドレス |
+| `email_verified_at` | timestamp | yes | メール認証日時 |
+| `password` | string | no | パスワード |
+| `role` | string | no | 権限。初期値 `member` |
+| `is_active` | boolean | no | 有効状態。初期値 `true` |
+| `remember_token` | string | yes | Laravel標準 |
+| `created_at` / `updated_at` | timestamp | yes | 作成・更新日時 |
+
+初期Seederでは `砂澤` と `荒` を作成します。
+
+### 5.2 `opnavi_customers`
+
+オペナビの事業者を管理するメインテーブルです。管理単位は「事業者」です。
+
+| カラム | 型 | NULL | 説明 |
+|---|---|---:|---|
+| `id` | bigint | no | システム自動採番ID |
+| `registered_at` | date | no | 登録日 |
+| `business_name` | string | no | 事業者名 |
+| `prefecture` | string | yes | 都道府県推定値。現在は補助項目 |
+| `region` | string | no | CSVの「地域」。画面上は「都道府県」として扱う |
+| `area_name` | string | no | 店舗 |
+| `address` | string | no | 住所 |
+| `website_url` | string | yes | Web URL |
+| `head_office_phone` | string | yes | 電話番号（本社） |
+| `public_phone` | string | yes | 電話番号（OTA公開） |
+| `contact_phone` | string | yes | 担当者電話番号 |
+| `experience_title` | string | no | 体験内容 |
+| `domestic_otas` | string | yes | 国内掲載OTA |
+| `ota_count` | unsigned integer | no | 掲載OTA数 |
+| `other_ota_names` | string | yes | その他OTA名 |
+| `business_scale` | string | yes | 事業者規模 |
+| `store_count` | unsigned integer | yes | 店舗数 |
+| `monthly_open_days` | unsigned integer | yes | 営業日数(1ヶ月) |
+| `request_booking_status` | string | yes | リクエスト予約 |
+| `research_notes` | text | yes | 調査メモ |
+| `status` | string | no | 顧客ステータス。初期値 `未対応` |
+| `priority` | string | yes | 優先度。DBには保持するが初期版の一覧では非表示 |
+| `owner_id` | foreignId | yes | 担当者。`users.id` を参照、削除時はNULL |
+| `last_action_at` | date | yes | 最終アクション日 |
+| `last_action_summary` | string | yes | 最終アクション概要 |
+| `next_action_at` | date | yes | 次回アクション日 |
+| `next_action_summary` | string | yes | 次回アクション概要 |
+| `sales_memo` | text | yes | 営業メモ |
+| `deleted_at` | timestamp | yes | 論理削除日時 |
+| `created_at` / `updated_at` | timestamp | yes | 作成・更新日時 |
+
+削除は論理削除です。論理削除済みデータは通常の一覧・検索には表示しません。
+
+### 5.3 `opnavi_ota_links`
+
+事業者ごとのOTAリンクを管理します。
+
+| カラム | 型 | NULL | 説明 |
+|---|---|---:|---|
+| `id` | bigint | no | 主キー |
+| `customer_id` | foreignId | no | `opnavi_customers.id` を参照 |
+| `ota_name` | string | no | OTA名。例: じゃらん、楽天 |
+| `listing_url` | text | no | OTA掲載URL |
+| `created_at` / `updated_at` | timestamp | yes | 作成・更新日時 |
+
+`customer_id` は顧客削除時にカスケード削除されます。
+
+### 5.4 `opnavi_activities`
+
+架電・対応履歴を管理します。
+
+| カラム | 型 | NULL | 説明 |
+|---|---|---:|---|
+| `id` | bigint | no | 主キー |
+| `customer_id` | foreignId | no | `opnavi_customers.id` を参照 |
+| `user_id` | foreignId | no | 対応した担当者。`users.id` を参照 |
+| `action_at` | datetime | no | 対応日時 |
+| `contact_person` | string | yes | 相手の担当者 |
+| `contact_status` | string | yes | 担当ステータス。`受付`、`担当者`、`代表`、`その他` から選択 |
+| `contact_phone` | string | yes | 担当者電話番号。過去互換用として保持し、初期画面では入力しない |
+| `status` | string | no | 対応時のステータス |
+| `memo` | text | no | メモ |
+| `created_at` / `updated_at` | timestamp | yes | 作成・更新日時 |
+
+`customer_id` は顧客削除時にカスケード削除されます。
+
+## 7. リレーション
+
+```mermaid
+erDiagram
+    users ||--o{ opnavi_customers : "owner_id"
+    users ||--o{ opnavi_activities : "user_id"
+    opnavi_customers ||--o{ opnavi_ota_links : "customer_id"
+    opnavi_customers ||--o{ opnavi_activities : "customer_id"
+```
+
+## 8. インデックス
+
+| テーブル | インデックス | 目的 |
+|---|---|---|
+| `users` | `email` unique | ログイン・ユーザー一意性 |
+| `opnavi_customers` | `business_name`, `address` | CSV重複判定、事業者名+住所での更新判定 |
+| `opnavi_customers` | `region`, `owner_id` | 都道府県・担当者の複合絞り込み |
+| `opnavi_customers` | `status`, `next_action_at` | ステータス、次回アクション日、期限切れ検索 |
+| `opnavi_customers` | `registered_at` | 初期表示の登録日降順ソート |
+| `opnavi_activities` | `customer_id`, `action_at` | 顧客ごとの履歴取得、最新履歴判定 |
+
+現時点では全文検索用インデックスは未設定です。キーワード検索は `LIKE` 条件で `business_name`、`region`、`address`、`area_name`、`experience_title`、`sales_memo` を対象にしています。
+
+## 9. CSVインポート仕様
+
+### 8.1 基本
+
+- 入口: 一覧画面のCSVインポートボタン
+- エンドポイント: `POST /opnavi/customers/import`
+- テンプレート: `app/public/templates/opnavi_import_template.csv`
+- 対応形式: CSV / txt
+- 文字コード: PHPの `fgetcsv` で読み取り可能なCSVを前提
+- 成功時: 一覧へ戻り、画面上部に `〇〇.csvのインポートに成功しました` を表示
+- 失敗時: インポートモーダル内にエラーを表示
+- モーダルを閉じた場合: エラー表示は消え、再度開いた時は空の状態で表示
+
+### 8.2 必須列
+
+CSVに以下の列が存在しない場合、インポートを停止します。
+
+- `登録日`
+- `事業者名`
+- `地域`
+- `店舗`
+- `住所`
+- `電話番号（OTA公開）`
+- `体験内容`
+- `国内掲載OTA`
+- `営業日数(1ヶ月)`
+- `リクエスト予約`
+- `OTA_URL（メイン4社）`
+- `ステータス`
+- `担当者`
+
+### 8.3 必須値
+
+以下の項目が空の行はエラーにします。
+
+- `登録日`
+- `事業者名`
+- `地域`
+- `店舗`
+- `住所`
+- `体験内容`
+- `国内掲載OTA`
+- `営業日数(1ヶ月)`
+- `リクエスト予約`
+
+`ステータス` と `担当者` は列としては必要ですが、値は空でも許容します。
+
+### 8.4 スキップ条件
+
+以下の行はエラーにせずスキップします。
+
+- インポート対象項目がすべて空の行
+- `営業日数(1ヶ月)` が12日未満の行
+
+営業日数12日未満の行をスキップした場合、成功メッセージに `営業日数12日未満のためN件をスキップしました` を付けます。
+
+### 8.5 重複判定
+
+重複判定キー:
+
+```text
+事業者名 + 住所
+```
+
+同じ事業者名・住所のデータが既に存在する場合、初回は重複候補としてエラー表示します。更新して取り込む場合は、確認チェックを入れて再実行します。
+
+確認付きで再実行した場合は、既存レコードを更新します。
+
+ただし、既存顧客の `status` はCSVでは更新しません。顧客の現在ステータスは最新の架電・対応履歴から反映する方針のため、CSVの `ステータス` は新規作成時の初期値としてのみ使用します。
+
+### 8.6 列マッピング
+
+| CSV列 | DBカラム | 備考 |
+|---|---|---|
+| `登録日` | `registered_at` | `Y/m/d`、`Y-m-d`、`Y.n.j`、`Y年n月j日` などを正規化 |
+| `事業者名` | `business_name` | 重複判定にも使用 |
+| `地域` | `region` | 画面では都道府県として表示 |
+| `地域` または `住所` | `prefecture` | 正規表現で都道府県を推定 |
+| `店舗` | `area_name` |  |
+| `住所` | `address` | 重複判定にも使用 |
+| `HP_URL` / `Web_URL` / `web_URL` | `website_url` | 存在する列を利用 |
+| `電話番号（本社）` | `head_office_phone` | 任意 |
+| `電話番号（OTA公開）` | `public_phone` | 列は必須、値は現在任意 |
+| `体験内容` | `experience_title` | 旧称「体験名」ではなく「体験内容」 |
+| `国内掲載OTA` | `domestic_otas` | OTA数計算にも利用 |
+| `OTA_URL（メイン4社）` | `opnavi_ota_links` | OTA名とURLに分解 |
+| `店舗数` | `store_count` | 数字のみ抽出。空欄の場合は `null` |
+| `営業日数(1ヶ月)` | `monthly_open_days` | 数字のみ抽出 |
+| `リクエスト予約` | `request_booking_status` |  |
+| `ステータス` | `status` | 新規作成時のみ使用。空または不正値の場合は `未対応`。既存顧客の重複更新時は現在ステータスを保持 |
+| `担当者` | `owner_id` | 名前から `users` を検索・作成 |
+
+CSVの `No`、`メモ` はインポート対象外です。
+
+### 8.7 OTA URL解析
+
+`OTA_URL（メイン4社）` は行単位で解析します。
+
+対応形式:
+
+```text
+じゃらん: https://example.com/...
+楽天：https://example.com/...
+```
+
+`:` または `：` の前をOTA名、後ろの `https://` から始まる文字列をURLとして保存します。
+
+### 8.8 CSVヘッダー重複への対応
+
+同名ヘッダーがCSV内に複数ある場合は、先に出現した列を採用し、後続の同名列は無視します。これは、点数列などにより同名ヘッダーが重複した場合に、本来の取り込み対象列が上書きされることを防ぐためです。
+
+## 10. 一覧画面仕様
+
+主な機能:
+
+- キーワード検索
+- 都道府県絞り込み
+- 担当者絞り込み
+- ステータス絞り込み
+- 並び替え
+- 表示件数切り替え: 25件 / 50件 / 100件
+- 固定チップ: 未対応、本日対応、期限切れ、未担当、OTA掲載あり
+- CSVインポート
+- 事業者名クリックでサイドモーダル詳細
+- 事業者名横のアイコンで別タブ詳細
+- ステータス、担当者、次回アクション日の確認
+- チェックボックスで選択した顧客への担当者一括設定
+
+初期表示:
+
+- 並び替え: 登録日
+- 順序: 降順
+
+ユーザーが検索条件・並び替え条件を指定した場合は、クエリ文字列で保持します。CSVインポート後も検索条件は維持します。
+
+一覧の表示列は可読性を優先します。優先度列は初期版では非表示です。DBカラムは残しているため、将来的に必要になった場合は画面に戻せます。
+
+## 11. 詳細画面仕様
+
+詳細画面では以下を扱います。
+
+- 基本情報の表示・編集
+- 電話番号（本社）のコピー
+- 電話番号（OTA公開）のコピー
+- 担当者電話番号
+- ステータス表示
+- 担当者
+- 次回アクション日
+- 営業メモ
+- 体験・OTA情報
+- OTA名リンク
+- Webサイトリンク
+- 架電・対応履歴の登録・メモ更新
+- 論理削除
+- 前後の事業者詳細への移動
+
+電話番号コピー時は `コピーしました` の通知を表示します。外部リンクは別タブで開きます。
+
+Web URLは入力欄の横に `Webサイトを開く` リンクを表示し、登録日 は基本情報の先頭ではなく後半に配置します。
+
+`戻る`、`次へ` ボタンは一覧画面から引き継いだ検索条件・並び替え条件に基づく前後の顧客を対象にします。サイドモーダル内ではAjaxで詳細本文のみを切り替え、通常の詳細画面ではページ遷移します。
+
+架電・対応履歴の新規登録フォームでは、詳細画面またはサイドモーダルを開いた時点の端末ローカル日時を `日時` に自動入力します。
+
+一覧サイドモーダル内でフォームに未保存の変更がある場合、閉じる操作時に確認ダイアログを表示します。
+
+一覧サイドモーダル内の保存・履歴登録・履歴更新フォームはAjaxで送信し、DB保存処理が完了した後に成功通知を表示します。保存後も詳細画面へ遷移せず、サイドモーダル本文だけを再読み込みします。HTTPエラーやバリデーションエラーなど保存が完了しなかった場合は、成功通知ではなくサイドモーダル内に失敗通知を表示します。
+
+複数タブ操作では、同じ顧客を複数タブで編集した場合は最後に保存された内容を反映します。ただし、別タブで顧客が削除済みになった後に詳細表示・保存・履歴登録を行った場合は保存せず、通常画面では一覧へ戻してエラー通知を表示し、サイドモーダルではモーダル内にエラー通知を表示します。
+
+削除時は確認モーダルを表示し、実行時は論理削除します。初期版では復元画面は作りません。
+
+## 12. ステータスと架電・対応履歴の同期
+
+利用するステータス:
+
+- `未対応`
+- `連絡済み`
+- `やり取り中`
+- `アポイント`
+- `商談中`
+- `契約`
+- `失注`
+
+顧客の現在ステータスは `opnavi_customers.status` に保持します。
+
+架電・対応履歴を登録またはメモ更新した場合、最新の履歴を基準に顧客情報へ同期します。
+
+同期対象:
+
+- `status`: 最新履歴のステータス
+- `last_action_at`: 最新履歴の対応日
+- `last_action_summary`: 最新履歴メモの先頭80文字
+
+最新履歴の判定:
+
+```text
+action_at desc, id desc
+```
+
+一覧画面・詳細画面のステータスは、この顧客ステータスを参照します。ステータスを履歴と一貫させるため、ステータス変更は新しい架電・対応履歴の登録を通じて行う方針です。登録済み履歴ではメモのみ更新できます。
+
+ステータス表示は `status-pill` で色分けします。
+
+| ステータス | CSSクラス | 背景 | 枠線 | 文字 |
+|---|---|---|---|---|
+| 未対応 | `status-pill--not-started` | `#f1f5f9` | `#cbd5e1` | `#334155` |
+| 連絡済み | `status-pill--contacted` | `#dbeafe` | `#93c5fd` | `#1d4ed8` |
+| やり取り中 | `status-pill--in-progress` | `#cffafe` | `#67e8f9` | `#0e7490` |
+| アポイント | `status-pill--appointment` | `#fef3c7` | `#fcd34d` | `#92400e` |
+| 商談中 | `status-pill--negotiation` | `#ede9fe` | `#c4b5fd` | `#6d28d9` |
+| 契約 | `status-pill--contracted` | `#dcfce7` | `#86efac` | `#166534` |
+| 失注 | `status-pill--lost` | `#fee2e2` | `#fca5a5` | `#b91c1c` |
+
+## 13. 営業ダッシュボード
+
+営業ダッシュボードでは以下の指標を表示します。
+
+| 指標 | 意味 |
+|---|---|
+| 総顧客数 | 登録されている事業者数 |
+| 未対応件数 | ステータスが未対応の件数 |
+| 本日対応件数 | 次回アクション日が今日の件数 |
+| 期限切れ件数 | 次回アクション日が過去の件数 |
+| 未担当件数 | 担当者が未設定の件数 |
+| 契約件数 | ステータスが契約の件数 |
+| 失注件数 | ステータスが失注の件数 |
+
+## 14. セキュリティ・運用方針
+
+初期版ではログイン機能は未実装です。ローカル確認を優先し、開発用の固定ユーザーを担当者として利用します。実運用前にはログイン機能を追加する前提です。
+
+DBに顧客情報・電話番号を保存するため、実運用時は以下を前提にします。
+
+- 本番環境ではHTTPSを利用する
+- `.env` はGit管理しない
+- 本番DBのユーザー権限を必要最小限にする
+- 本番DBパスワードは開発環境と分ける
+- バックアップファイルの保管場所と閲覧権限を制限する
+- 画面アクセスにはログイン機能を導入する
+
+暗号化については、初期版ではアプリケーションレベルのカラム暗号化は未実装です。電話番号などの秘匿性をさらに高める場合は、Laravelの暗号化キャストまたは独自暗号化を検討します。ただし、検索・CSV更新・重複判定との相性があるため、対象カラムを決めてから設計します。
+
+## 15. バックアップ方針
+
+方針:
+
+- 日次バックアップ
+- CSVインポート前の手動バックアップ
+- 運用前に復元テストを実施
+
+初期版では復元画面は実装しません。復元はDBバックアップから管理者が実施する想定です。
+
+## 16. 今後の検討事項
+
+- ログイン機能、権限管理
+- 本番環境へのデプロイ手順
+- エックスサーバー利用時の構成
+- 電話番号など個人情報カラムの暗号化
+- CSV重複時に上書きする項目の細分化
+- CSVエクスポート
+- 削除済みデータの復元画面
+- 送客サービス側のDB・画面設計
+- 優先度項目を再度使うかどうか
+- バックアップ自動化と復元手順書
