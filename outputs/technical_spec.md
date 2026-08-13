@@ -29,7 +29,7 @@
 | サービス | `app/app/Services/Opnavi/CustomerService.php` | 顧客更新時の補完処理 |
 | サービス | `app/app/Services/Opnavi/CustomerQueryService.php` | 一覧検索、並び替え、ページネーション、選択肢取得 |
 | サービス | `app/app/Services/Opnavi/CustomerImportService.php` | CSV読込、検証、重複判定、OTAリンク解析、保存 |
-| サービス | `app/app/Services/Opnavi/CustomerActivityService.php` | 架電・対応履歴の登録・更新、最新履歴からの顧客ステータス同期 |
+| サービス | `app/app/Services/Opnavi/CustomerActivityService.php` | 架電・対応履歴の登録・更新・削除、最新履歴からの顧客ステータス同期 |
 | モデル | `app/app/Models/Customer.php` | オペナビ顧客 |
 | モデル | `app/app/Models/OtaLink.php` | OTAリンク |
 | モデル | `app/app/Models/Activity.php` | 架電・対応履歴 |
@@ -128,6 +128,8 @@ php artisan test
 |---|---|
 | `CustomerListTest` | 都道府県・担当者の絞り込み、一覧上の担当者即保存後に一覧へ戻ること |
 | `CustomerListTest` | 選択した顧客の担当者を一括更新でき、未選択時はエラーになること |
+| `CustomerListTest` | ユーザー画面ではCSVインポート、一括担当者設定、管理用導線が表示されないこと |
+| `CustomerListTest` | ユーザー詳細では管理項目の変更や顧客削除が制限され、許可された3項目だけ更新できること |
 | `CustomerActivityTest` | 架電・対応履歴登録後に顧客ステータス、最終アクション日、最終メモが同期されること |
 | `CustomerImportTest` | CSVインポートで顧客・OTAリンクが作成され、営業日数12日未満の行がスキップされること |
 
@@ -137,22 +139,43 @@ php artisan test
 |---|---|---|---|---|
 | `GET` | `/` | `home` | `HomeController@index` | トップ画面 |
 | `GET` | `/opnavi` | `opnavi` | redirect | オペナビ一覧へ遷移 |
-| `GET` | `/opnavi/dashboard` | `dashboard` | `DashboardController@index` | 営業ダッシュボード |
-| `GET` | `/opnavi/customers` | `customers.index` | `CustomerController@index` | 顧客一覧 |
-| `PATCH` | `/opnavi/customers/bulk-owner` | `customers.bulk-owner` | `CustomerController@bulkUpdateOwner` | 選択顧客の担当者一括設定 |
-| `POST` | `/opnavi/customers/import` | `customers.import` | `CustomerController@import` | CSVインポート |
-| `GET` | `/opnavi/customers/{customer}` | `customers.show` | `CustomerController@show` | 詳細画面 |
-| `PATCH` | `/opnavi/customers/{customer}` | `customers.update` | `CustomerController@update` | 顧客基本情報更新 |
-| `DELETE` | `/opnavi/customers/{customer}` | `customers.destroy` | `CustomerController@destroy` | 顧客削除 |
-| `POST` | `/opnavi/customers/{customer}/activities` | `customers.activities.store` | `CustomerController@storeActivity` | 架電・対応履歴登録 |
-| `PATCH` | `/opnavi/customers/{customer}/activities/{activity}` | `customers.activities.update` | `CustomerController@updateActivity` | 架電・対応履歴のメモ更新 |
+| `GET` | `/opnavi/admin/dashboard` | `dashboard` | `DashboardController@index` | 管理画面: 営業ダッシュボード |
+| `GET` | `/opnavi/admin/customers` | `customers.index` | `CustomerController@index` | 管理画面: 顧客一覧 |
+| `PATCH` | `/opnavi/admin/customers/bulk-owner` | `customers.bulk-owner` | `CustomerController@bulkUpdateOwner` | 管理画面: 選択顧客の担当者一括設定 |
+| `POST` | `/opnavi/admin/customers/import` | `customers.import` | `CustomerController@import` | 管理画面: CSVインポート |
+| `GET` | `/opnavi/admin/customers/{customer}` | `customers.show` | `CustomerController@show` | 管理画面: 詳細画面 |
+| `PATCH` | `/opnavi/admin/customers/{customer}` | `customers.update` | `CustomerController@update` | 管理画面: 顧客基本情報更新 |
+| `DELETE` | `/opnavi/admin/customers/{customer}` | `customers.destroy` | `CustomerController@destroy` | 管理画面: 顧客削除 |
+| `POST` | `/opnavi/admin/customers/{customer}/activities` | `customers.activities.store` | `CustomerController@storeActivity` | 管理画面: 架電・対応履歴登録 |
+| `PATCH` | `/opnavi/admin/customers/{customer}/activities/{activity}` | `customers.activities.update` | `CustomerController@updateActivity` | 管理画面: 架電・対応履歴更新 |
+| `DELETE` | `/opnavi/admin/customers/{customer}/activities/{activity}` | `customers.activities.destroy` | `CustomerController@destroyActivity` | 管理画面: 架電・対応履歴削除 |
+| `GET` | `/opnavi/user/customers` | `user.customers.index` | `CustomerController@userIndex` | ユーザー画面: 顧客一覧 |
+| `GET` | `/opnavi/user/customers/{customer}` | `user.customers.show` | `CustomerController@userShow` | ユーザー画面: 詳細画面 |
+| `PATCH` | `/opnavi/user/customers/{customer}` | `user.customers.update` | `CustomerController@userUpdate` | ユーザー画面: 許可項目更新 |
+| `POST` | `/opnavi/user/customers/{customer}/activities` | `user.customers.activities.store` | `CustomerController@userStoreActivity` | ユーザー画面: 架電・対応履歴登録 |
+| `PATCH` | `/opnavi/user/customers/{customer}/activities/{activity}` | `user.customers.activities.update` | `CustomerController@userUpdateActivity` | ユーザー画面: 架電・対応履歴更新 |
 
 詳細画面は2つの表示形式があります。
 
-- 通常アクセス: `/opnavi/customers/{id}` で詳細画面を1画面表示
-- 一覧サイドモーダル: `/opnavi/customers/{id}?modal=1` をAjaxで取得し、部分テンプレートを表示
+- 管理通常アクセス: `/opnavi/admin/customers/{id}` で詳細画面を1画面表示
+- 管理一覧サイドモーダル: `/opnavi/admin/customers/{id}?modal=1` をAjaxで取得し、部分テンプレートを表示
+- ユーザー通常アクセス: `/opnavi/user/customers/{id}` で機能制限された詳細画面を1画面表示
+- ユーザー一覧サイドモーダル: `/opnavi/user/customers/{id}?modal=1` をAjaxで取得し、部分テンプレートを表示
 
 `?modal=1` が付いていても、Ajaxではない通常アクセスの場合はフルレイアウトで表示します。これにより、履歴登録後などにCSSが当たらない部分HTMLだけの画面へ遷移しないようにしています。
+
+旧URL `/opnavi/customers`、`/opnavi/customers/{customer}`、`/opnavi/dashboard` は、既存ブックマークやローカル確認の互換性を保つため、管理画面URLへリダイレクトします。
+
+ユーザー画面では、認証・権限管理の実装前でも管理画面とURLを分け、画面上の操作も制限します。初期版ではユーザー画面に以下のルートを用意しません。
+
+- 営業ダッシュボード
+- CSVインポート
+- 事業者名、住所、担当者などの管理項目更新
+- 顧客削除
+- 担当者一括更新
+- 架電・対応履歴削除
+
+ユーザー画面の顧客更新では、`UserCustomerUpdateRequest` を使い、保存対象を `contact_phone`、`next_action_at`、`sales_memo` の3項目に限定します。フォーム上にその他の値が含まれていても、ユーザー画面の更新処理では保存対象にしません。
 
 ## 6. DBテーブル
 
@@ -421,7 +444,7 @@ CSVの `No`、`メモ` はインポート対象外です。
 - 体験・OTA情報
 - OTA名リンク
 - Webサイトリンク
-- 架電・対応履歴の登録・メモ更新
+- 架電・対応履歴の登録・既存履歴更新
 - 論理削除
 - 前後の事業者詳細への移動
 
@@ -455,7 +478,7 @@ Web URLは入力欄の横に `Webサイトを開く` リンクを表示し、登
 
 顧客の現在ステータスは `opnavi_customers.status` に保持します。
 
-架電・対応履歴を登録またはメモ更新した場合、最新の履歴を基準に顧客情報へ同期します。
+架電・対応履歴を登録、既存履歴を更新、または履歴を削除した場合、最新の履歴を基準に顧客情報へ同期します。
 
 同期対象:
 
@@ -469,7 +492,9 @@ Web URLは入力欄の横に `Webサイトを開く` リンクを表示し、登
 action_at desc, id desc
 ```
 
-一覧画面・詳細画面のステータスは、この顧客ステータスを参照します。ステータスを履歴と一貫させるため、ステータス変更は新しい架電・対応履歴の登録を通じて行う方針です。登録済み履歴ではメモのみ更新できます。
+一覧画面・詳細画面のステータスは、この顧客ステータスを参照します。ステータスを履歴と一貫させるため、ステータス変更は架電・対応履歴の登録または既存履歴の編集を通じて行います。登録済み履歴では担当者、担当ステータス、ステータス、メモを更新できます。
+
+履歴削除後に履歴が1件も残っていない場合は、顧客ステータスを `未対応` に戻し、`last_action_at` と `last_action_summary` を空にします。
 
 ステータス表示は `status-pill` で色分けします。
 

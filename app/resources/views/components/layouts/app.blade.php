@@ -9,22 +9,29 @@
     <script src="{{ asset('js/app.js') }}?v={{ filemtime(public_path('js/app.js')) }}" defer></script>
 </head>
 <body>
+    @php
+        $isUserScreen = request()->routeIs('user.*');
+        $customerIndexRoute = $isUserScreen ? 'user.customers.index' : 'customers.index';
+        $homeRoute = $isUserScreen ? 'user.home' : 'home';
+    @endphp
     <div class="app-shell {{ request()->is('opnavi*') ? 'has-sidebar' : '' }}" data-shell>
         @if (request()->is('opnavi*'))
             <aside class="sidebar" data-sidebar>
                 <div class="sidebar__head">
-                    <a class="brand" href="{{ route('home') }}">コキャッチ</a>
+                    <a class="brand" href="{{ route($homeRoute) }}">コキャッチ</a>
                     <button class="icon-button" type="button" data-sidebar-toggle title="サイドバーを開閉">≡</button>
                 </div>
                 <nav class="sidebar__nav">
-                    <a href="{{ route('customers.index') }}" class="{{ request()->routeIs('customers.*') ? 'active' : '' }}">一覧画面</a>
-                    <a href="{{ route('dashboard') }}" class="{{ request()->routeIs('dashboard') ? 'active' : '' }}">営業ダッシュボード</a>
+                    <a href="{{ route($customerIndexRoute) }}" class="{{ request()->routeIs('customers.*') || request()->routeIs('user.customers.*') ? 'active' : '' }}">一覧画面</a>
+                    @unless ($isUserScreen)
+                        <a href="{{ route('dashboard') }}" class="{{ request()->routeIs('dashboard') ? 'active' : '' }}">営業ダッシュボード</a>
+                    @endunless
                 </nav>
             </aside>
         @endif
 
         <main class="main">
-            @if (session('status') && ! request()->routeIs('customers.index') && session('status_area') !== 'activity')
+            @if (session('status') && ! request()->routeIs('customers.index') && ! request()->routeIs('user.customers.index') && session('status_area') !== 'activity')
                 <div class="toast success">{{ session('status') }}</div>
             @endif
             @if (session('error'))

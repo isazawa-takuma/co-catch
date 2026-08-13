@@ -15,9 +15,9 @@ class CustomerQueryService
 
         $this->applyFilters($query, $request);
 
+        $this->applySort($query, $request);
+
         return $query
-            ->orderBy($this->sortBy($request), $this->sortOrder($request))
-            ->orderByDesc('id')
             ->paginate($this->perPage($request))
             ->withQueryString();
     }
@@ -48,10 +48,9 @@ class CustomerQueryService
 
         $this->applyFilters($query, $request);
 
-        $ids = $query
-            ->orderBy($this->sortBy($request), $this->sortOrder($request))
-            ->orderByDesc('id')
-            ->pluck('id')
+        $this->applySort($query, $request);
+
+        $ids = $query->pluck('id')
             ->map(fn ($id) => (int) $id)
             ->values();
 
@@ -100,17 +99,36 @@ class CustomerQueryService
         }
     }
 
-    private function sortBy(Request $request): string
+    private function applySort(Builder $query, Request $request): void
     {
-        $sortBy = $request->input('sort_by', 'registered_at');
-        $allowedSorts = ['registered_at', 'last_action_at', 'next_action_at', 'ota_count', 'status'];
+        $sortBy = $this->sortBy($request);
+        $sortOrder = $this->sortOrder($request);
 
-        return in_array($sortBy, $allowedSorts, true) ? $sortBy : 'registered_at';
+        if ($sortBy === 'next_action_at') {
+            $query->orderByRaw('next_action_at is null')
+                ->orderBy('next_action_at', $sortOrder)
+                ->orderByDesc('id');
+
+            return;
+        }
+
+        $query->orderBy($sortBy, $sortOrder)
+            ->orderByDesc('id');
     }
 
-    private function sortOrder(Request $request): string
+    public function sortBy(Request $request): string
     {
-        return $request->input('sort_order', 'desc') === 'asc' ? 'asc' : 'desc';
+        $sortBy = $request->input('sort_by', 'next_action_at');
+        $allowedSorts = ['last_action_at', 'next_action_at', 'ota_count', 'status'];
+
+        return in_array($sortBy, $allowedSorts, true) ? $sortBy : 'next_action_at';
+    }
+
+    public function sortOrder(Request $request): string
+    {
+        $defaultOrder = $this->sortBy($request) === 'next_action_at' ? 'asc' : 'desc';
+
+        return $request->input('sort_order', $defaultOrder) === 'desc' ? 'desc' : 'asc';
     }
 
     private function perPage(Request $request): int

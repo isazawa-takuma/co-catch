@@ -1,10 +1,19 @@
 <x-layouts.app title="オペナビ一覧">
+    @php
+        $isUserScreen = request()->routeIs('user.*');
+        $indexRoute = $isUserScreen ? 'user.customers.index' : 'customers.index';
+        $showRoute = $isUserScreen ? 'user.customers.show' : 'customers.show';
+        $updateRoute = $isUserScreen ? 'user.customers.update' : 'customers.update';
+    @endphp
+
     <div class="page-header">
         <div>
             <p class="eyebrow">オペナビ</p>
             <h1>顧客一覧</h1>
         </div>
-        <button class="button primary" type="button" data-import-open>CSVインポート</button>
+        @unless ($isUserScreen)
+            <button class="button primary" type="button" data-import-open>CSVインポート</button>
+        @endunless
     </div>
 
     @if (session('import_warnings'))
@@ -17,9 +26,9 @@
     @endif
 
     <div class="list-layout">
-        <form class="filters" method="get" action="{{ route('customers.index') }}">
+        <form class="filters" method="get" action="{{ route($indexRoute) }}">
             <label>
-                事業者名・都道府県・住所
+                事業者名・都道府県・住所・営業メモ
                 <input type="search" name="keyword" value="{{ $filters['keyword'] ?? '' }}" placeholder="検索">
             </label>
             <label>
@@ -52,9 +61,8 @@
             <label>
                 並び替え
                 <select name="sort_by">
-                    <option value="registered_at" @selected(($filters['sort_by'] ?? 'registered_at') === 'registered_at')>登録日</option>
+                    <option value="next_action_at" @selected(($filters['sort_by'] ?? 'next_action_at') === 'next_action_at')>次回アクション日</option>
                     <option value="last_action_at" @selected(($filters['sort_by'] ?? '') === 'last_action_at')>最終アクション日</option>
-                    <option value="next_action_at" @selected(($filters['sort_by'] ?? '') === 'next_action_at')>次回アクション日</option>
                     <option value="ota_count" @selected(($filters['sort_by'] ?? '') === 'ota_count')>掲載OTA数</option>
                     <option value="status" @selected(($filters['sort_by'] ?? '') === 'status')>ステータス</option>
                 </select>
@@ -62,8 +70,8 @@
             <label>
                 順序
                 <select name="sort_order">
-                    <option value="desc" @selected(($filters['sort_order'] ?? 'desc') === 'desc')>降順</option>
-                    <option value="asc" @selected(($filters['sort_order'] ?? '') === 'asc')>昇順</option>
+                    <option value="asc" @selected(($filters['sort_order'] ?? 'asc') === 'asc')>近い順 / 昇順</option>
+                    <option value="desc" @selected(($filters['sort_order'] ?? '') === 'desc')>遠い順 / 降順</option>
                 </select>
             </label>
             <label>
@@ -77,14 +85,14 @@
             <div class="filter-footer">
                 <div class="filter-actions">
                     <button class="button primary" type="submit">検索</button>
-                    <a class="button" href="{{ route('customers.index') }}">条件をクリア</a>
+                    <a class="button" href="{{ route($indexRoute) }}">条件をクリア</a>
                 </div>
                 <div class="chips">
-                    <a href="{{ route('customers.index', array_merge(request()->except('page'), ['chip' => 'not_started'])) }}">未対応</a>
-                    <a href="{{ route('customers.index', array_merge(request()->except('page'), ['chip' => 'today'])) }}">本日対応</a>
-                    <a href="{{ route('customers.index', array_merge(request()->except('page'), ['chip' => 'overdue'])) }}">期限切れ</a>
-                    <a href="{{ route('customers.index', array_merge(request()->except('page'), ['chip' => 'unassigned'])) }}">未担当</a>
-                    <a href="{{ route('customers.index', array_merge(request()->except('page'), ['chip' => 'has_ota'])) }}">OTA掲載あり</a>
+                    <a href="{{ route($indexRoute, array_merge(request()->except('page'), ['chip' => 'not_started'])) }}">未対応</a>
+                    <a href="{{ route($indexRoute, array_merge(request()->except('page'), ['chip' => 'today'])) }}">本日対応</a>
+                    <a href="{{ route($indexRoute, array_merge(request()->except('page'), ['chip' => 'overdue'])) }}">期限切れ</a>
+                    <a href="{{ route($indexRoute, array_merge(request()->except('page'), ['chip' => 'unassigned'])) }}">未担当</a>
+                    <a href="{{ route($indexRoute, array_merge(request()->except('page'), ['chip' => 'has_ota'])) }}">OTA掲載あり</a>
                 </div>
             </div>
         </form>
@@ -99,35 +107,43 @@
                     @if (request()->query())
                         条件に一致する顧客が見つかりませんでした。
                     @else
-                        まだ顧客が登録されていません。CSVインポートから顧客リストを登録してください。
+                        @if ($isUserScreen)
+                            まだ表示できる顧客がありません。
+                        @else
+                            まだ顧客が登録されていません。CSVインポートから顧客リストを登録してください。
+                        @endif
                     @endif
                 </div>
             @else
-                <form id="bulk-owner-form" class="bulk-actions" method="post" action="{{ route('customers.bulk-owner') }}" data-bulk-owner-form>
-                    @csrf
-                    @method('patch')
-                    <input type="hidden" name="redirect_to" value="{{ url()->full() }}">
-                    <label>
-                        一括担当者設定
-                        <select name="owner_id">
-                            <option value="">未担当</option>
-                            @foreach ($users as $user)
-                                <option value="{{ $user->id }}">{{ $user->name }}</option>
-                            @endforeach
-                        </select>
-                    </label>
-                    <button class="button" type="submit">選択した顧客に適用</button>
-                    <span class="muted-text" data-bulk-selected-count>0件選択中</span>
-                </form>
+                @unless ($isUserScreen)
+                    <form id="bulk-owner-form" class="bulk-actions" method="post" action="{{ route('customers.bulk-owner') }}" data-bulk-owner-form>
+                        @csrf
+                        @method('patch')
+                        <input type="hidden" name="redirect_to" value="{{ url()->full() }}">
+                        <label>
+                            一括担当者設定
+                            <select name="owner_id">
+                                <option value="">未担当</option>
+                                @foreach ($users as $user)
+                                    <option value="{{ $user->id }}">{{ $user->name }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+                        <button class="button" type="submit">選択した顧客に適用</button>
+                        <span class="muted-text" data-bulk-selected-count>0件選択中</span>
+                    </form>
+                @endunless
                 <div class="table-scroll">
-                    <table class="customer-table">
+                    <table class="customer-table {{ $isUserScreen ? 'customer-table--user' : '' }}">
                         <thead>
                             <tr>
-                                <th class="select-col">
-                                    <input type="checkbox" data-bulk-check-all aria-label="表示中の顧客をすべて選択">
-                                </th>
+                                @unless ($isUserScreen)
+                                    <th class="select-col">
+                                        <input type="checkbox" data-bulk-check-all aria-label="表示中の顧客をすべて選択">
+                                    </th>
+                                @endunless
                                 <th class="sticky-col">事業者名</th>
-                                <th>登録日</th>
+                                <th class="registered-col">登録日</th>
                                 <th>都道府県</th>
                                 <th>店舗</th>
                                 <th>掲載OTA数</th>
@@ -141,18 +157,20 @@
                         <tbody>
                             @foreach ($customers as $customer)
                                 <tr data-customer-row="{{ $customer->id }}">
-                                    <td class="select-col">
-                                        <input type="checkbox" form="bulk-owner-form" name="customer_ids[]" value="{{ $customer->id }}" data-bulk-check aria-label="{{ $customer->business_name }}を選択">
-                                    </td>
+                                    @unless ($isUserScreen)
+                                        <td class="select-col">
+                                            <input type="checkbox" form="bulk-owner-form" name="customer_ids[]" value="{{ $customer->id }}" data-bulk-check aria-label="{{ $customer->business_name }}を選択">
+                                        </td>
+                                    @endunless
                                     <td class="sticky-col name-cell">
                                         <div class="name-cell__inner">
-                                            <a href="{{ route('customers.show', array_merge(['customer' => $customer], request()->query())) }}" data-drawer-url="{{ route('customers.show', array_merge(['customer' => $customer, 'modal' => 1], request()->query())) }}" data-customer-id="{{ $customer->id }}">{{ $customer->business_name }}</a>
-                                            <a class="detail-link" href="{{ route('customers.show', array_merge(['customer' => $customer], request()->query())) }}" target="_blank" rel="noreferrer" title="別タブで詳細を開く" aria-label="別タブで詳細を開く">
+                                            <a href="{{ route($showRoute, array_merge(['customer' => $customer], request()->query())) }}" data-drawer-url="{{ route($showRoute, array_merge(['customer' => $customer, 'modal' => 1], request()->query())) }}" data-customer-id="{{ $customer->id }}">{{ $customer->business_name }}</a>
+                                            <a class="detail-link" href="{{ route($showRoute, array_merge(['customer' => $customer], request()->query())) }}" target="_blank" rel="noreferrer" title="別タブで詳細を開く" aria-label="別タブで詳細を開く">
                                                 <img src="{{ asset('images/external-link.png') }}" alt="">
                                             </a>
                                         </div>
                                     </td>
-                                    <td>{{ optional($customer->registered_at)->format('Y/m/d') }}</td>
+                                    <td class="registered-col">{{ optional($customer->registered_at)->format('Y/m/d') }}</td>
                                     <td>{{ $customer->region }}</td>
                                     <td>{{ $customer->area_name }}</td>
                                     <td>{{ $customer->ota_count }}</td>
@@ -166,28 +184,71 @@
                                             '商談中' => 'negotiation',
                                             '契約' => 'contracted',
                                             '失注' => 'lost',
-                                        ][$customer->status] ?? 'default' }}">{{ $customer->status }}</span>
+                                        ][$customer->status] ?? 'default' }}" data-customer-status-pill>{{ $customer->status }}</span>
                                     </td>
                                     <td class="owner-col">
-                                        <form method="post" action="{{ route('customers.update', $customer) }}">
-                                            @csrf
-                                            @method('patch')
-                                            <input type="hidden" name="redirect_to" value="{{ url()->full() }}">
-                                            <select name="owner_id" onchange="this.form.submit()">
-                                                <option value="">未担当</option>
-                                                @foreach ($users as $user)
-                                                    <option value="{{ $user->id }}" @selected($customer->owner_id === $user->id)>{{ $user->name }}</option>
-                                                @endforeach
-                                            </select>
-                                        </form>
+                                        @if ($isUserScreen)
+                                            {{ $customer->owner?->name ?? '未担当' }}
+                                        @else
+                                            <form method="post" action="{{ route('customers.update', $customer) }}">
+                                                @csrf
+                                                @method('patch')
+                                                <input type="hidden" name="redirect_to" value="{{ url()->full() }}">
+                                                <select name="owner_id" onchange="this.form.submit()">
+                                                    <option value="">未担当</option>
+                                                    @foreach ($users as $user)
+                                                        <option value="{{ $user->id }}" @selected($customer->owner_id === $user->id)>{{ $user->name }}</option>
+                                                    @endforeach
+                                                </select>
+                                            </form>
+                                        @endif
                                     </td>
                                     <td>{{ optional($customer->last_action_at)->format('Y/m/d') ?? '-' }}</td>
                                     <td>
-                                        <form method="post" action="{{ route('customers.update', $customer) }}" class="date-inline">
+                                        <form method="post" action="{{ route($updateRoute, $customer) }}" class="date-inline">
                                             @csrf
                                             @method('patch')
                                             <input type="hidden" name="redirect_to" value="{{ url()->full() }}">
-                                            <input type="date" name="next_action_at" value="{{ optional($customer->next_action_at)->format('Y-m-d') }}" onchange="this.form.submit()">
+                                            <div class="list-date-picker" data-list-date-picker data-submit-on-apply="true">
+                                                <input type="hidden" name="next_action_at" value="{{ optional($customer->next_action_at)->format('Y-m-d') }}" data-list-date-value>
+                                                <button
+                                                    class="list-date-picker__trigger"
+                                                    type="button"
+                                                    aria-haspopup="dialog"
+                                                    aria-expanded="false"
+                                                    aria-controls="next-action-calendar-{{ $customer->id }}"
+                                                >
+                                                    <span data-list-date-label></span>
+                                                    <img class="list-date-picker__icon" src="{{ asset('images/calendar.png') }}" alt="" aria-hidden="true">
+                                                </button>
+                                                <section
+                                                    id="next-action-calendar-{{ $customer->id }}"
+                                                    class="list-date-picker__calendar"
+                                                    role="dialog"
+                                                    aria-label="次回アクション日を選択"
+                                                    hidden
+                                                >
+                                                    <header class="list-date-picker__head">
+                                                        <button class="list-date-picker__nav" type="button" data-prev-month aria-label="前月">‹</button>
+                                                        <h2 class="list-date-picker__month" data-month-label></h2>
+                                                        <button class="list-date-picker__nav" type="button" data-next-month aria-label="翌月">›</button>
+                                                    </header>
+                                                    <div class="list-date-picker__weekdays" aria-hidden="true">
+                                                        <span>日</span>
+                                                        <span>月</span>
+                                                        <span>火</span>
+                                                        <span>水</span>
+                                                        <span>木</span>
+                                                        <span>金</span>
+                                                        <span>土</span>
+                                                    </div>
+                                                    <div class="list-date-picker__dates" data-dates role="grid" aria-label="日付"></div>
+                                                    <footer class="list-date-picker__foot">
+                                                        <button class="list-date-picker__text-button" type="button" data-clear>クリア</button>
+                                                        <button class="list-date-picker__text-button" type="button" data-today>今日</button>
+                                                    </footer>
+                                                </section>
+                                            </div>
                                             @if ($customer->next_action_at)
                                                 @if ($customer->next_action_at->isToday())
                                                     <span class="badge danger">本日対応</span>
@@ -217,31 +278,33 @@
         </section>
     </div>
 
-    <div class="modal" data-import-modal @if(!session('open_import')) hidden @endif>
-        <div class="modal__backdrop" data-import-close></div>
-        <section class="modal__panel">
-            <button class="icon-button modal__close" type="button" data-import-close>×</button>
-            <h2>CSVインポート</h2>
-            @if (session('import_errors'))
-                <div class="toast error in-modal" data-import-errors>
-                    @foreach (session('import_errors') as $importError)
-                        <div>{{ $importError }}</div>
-                    @endforeach
-                </div>
-            @endif
-            <form method="post" action="{{ route('customers.import') }}" enctype="multipart/form-data" class="stack-form" data-import-form>
-                @csrf
-                <a class="button" href="{{ asset('templates/opnavi_import_template.csv') }}" download>テンプレートをダウンロード</a>
-                <label>
-                    CSVファイル
-                    <input type="file" name="csv_file" accept=".csv,text/csv" required>
-                </label>
-                <label class="checkbox">
-                    <input type="checkbox" name="confirm_duplicates" value="1">
-                    重複した事業者名 + 住所は更新して取り込む
-                </label>
-                <button class="button primary" type="submit">インポート</button>
-            </form>
-        </section>
-    </div>
+    @unless ($isUserScreen)
+        <div class="modal" data-import-modal @if(!session('open_import')) hidden @endif>
+            <div class="modal__backdrop" data-import-close></div>
+            <section class="modal__panel">
+                <button class="icon-button modal__close" type="button" data-import-close>×</button>
+                <h2>CSVインポート</h2>
+                @if (session('import_errors'))
+                    <div class="toast error in-modal" data-import-errors>
+                        @foreach (session('import_errors') as $importError)
+                            <div>{{ $importError }}</div>
+                        @endforeach
+                    </div>
+                @endif
+                <form method="post" action="{{ route('customers.import') }}" enctype="multipart/form-data" class="stack-form" data-import-form>
+                    @csrf
+                    <a class="button" href="{{ asset('templates/opnavi_import_template.csv') }}" download>テンプレートをダウンロード</a>
+                    <label>
+                        CSVファイル
+                        <input type="file" name="csv_file" accept=".csv,text/csv" required>
+                    </label>
+                    <label class="checkbox">
+                        <input type="checkbox" name="confirm_duplicates" value="1">
+                        重複した事業者名 + 住所は更新して取り込む
+                    </label>
+                    <button class="button primary" type="submit">インポート</button>
+                </form>
+            </section>
+        </div>
+    @endunless
 </x-layouts.app>

@@ -6,6 +6,7 @@ use App\Http\Requests\ActivitySaveRequest;
 use App\Http\Requests\CustomerBulkOwnerUpdateRequest;
 use App\Http\Requests\CustomerImportRequest;
 use App\Http\Requests\CustomerUpdateRequest;
+use App\Http\Requests\UserCustomerUpdateRequest;
 use App\Models\Activity;
 use App\Models\Customer;
 use App\Services\Opnavi\CustomerActivityService;
@@ -27,16 +28,41 @@ class CustomerController extends Controller
 
     public function index(Request $request)
     {
+        return $this->listView($request);
+    }
+
+    public function userIndex(Request $request)
+    {
+        return $this->listView($request);
+    }
+
+    private function listView(Request $request)
+    {
+        $filters = array_merge($request->all(), [
+            'sort_by' => $this->queryService->sortBy($request),
+            'sort_order' => $this->queryService->sortOrder($request),
+        ]);
+
         return view('customers.index', [
             'customers' => $this->queryService->paginate($request),
             'users' => $this->queryService->activeUsers(),
             'statuses' => Customer::STATUSES,
-            'filters' => $request->all(),
+            'filters' => $filters,
             'regions' => $this->queryService->regions(),
         ]);
     }
 
     public function show(Request $request, Customer $customer)
+    {
+        return $this->detailView($request, $customer);
+    }
+
+    public function userShow(Request $request, Customer $customer)
+    {
+        return $this->detailView($request, $customer);
+    }
+
+    private function detailView(Request $request, Customer $customer)
     {
         $customer->load(['owner', 'otaLinks', 'activities.user']);
 
@@ -62,6 +88,19 @@ class CustomerController extends Controller
         return $this->redirectToCustomerDetail($request, $customer)->with('status', '保存しました');
     }
 
+    public function userUpdate(UserCustomerUpdateRequest $request, Customer $customer)
+    {
+        $data = $request->safe()->only([
+            'contact_phone',
+            'next_action_at',
+            'sales_memo',
+        ]);
+
+        $this->customerService->update($customer, $data);
+
+        return $this->redirectToCustomerDetail($request, $customer, 'user')->with('status', '保存しました');
+    }
+
     public function bulkUpdateOwner(CustomerBulkOwnerUpdateRequest $request)
     {
         $data = $request->validated();
@@ -81,12 +120,39 @@ class CustomerController extends Controller
             ->with('status_area', 'activity');
     }
 
+    public function userStoreActivity(ActivitySaveRequest $request, Customer $customer)
+    {
+        $this->activityService->create($customer, $request->validated());
+
+        return $this->redirectToCustomerDetail($request, $customer, 'user')
+            ->with('status', '履歴を登録しました')
+            ->with('status_area', 'activity');
+    }
+
     public function updateActivity(ActivitySaveRequest $request, Customer $customer, Activity $activity)
     {
         $this->activityService->update($customer, $activity, $request->validated());
 
         return $this->redirectToCustomerDetail($request, $customer)
             ->with('status', '履歴を更新しました')
+            ->with('status_area', 'activity');
+    }
+
+    public function userUpdateActivity(ActivitySaveRequest $request, Customer $customer, Activity $activity)
+    {
+        $this->activityService->update($customer, $activity, $request->validated());
+
+        return $this->redirectToCustomerDetail($request, $customer, 'user')
+            ->with('status', '履歴を更新しました')
+            ->with('status_area', 'activity');
+    }
+
+    public function destroyActivity(Request $request, Customer $customer, Activity $activity)
+    {
+        $this->activityService->delete($customer, $activity);
+
+        return $this->redirectToCustomerDetail($request, $customer)
+            ->with('status', '履歴を削除しました')
             ->with('status_area', 'activity');
     }
 
@@ -116,17 +182,19 @@ class CustomerController extends Controller
             ->with('import_warnings', $result['warnings']);
     }
 
-    private function redirectToCustomerDetail(Request $request, Customer $customer)
+    private function redirectToCustomerDetail(Request $request, Customer $customer, string $screen = 'admin')
     {
         if ($request->filled('redirect_to') && Str::startsWith($request->input('redirect_to'), url('/'))) {
             return redirect()->to($request->input('redirect_to'));
         }
 
+        $showRoute = $screen === 'user' ? 'user.customers.show' : 'customers.show';
+
         if ($request->boolean('modal')) {
-            return redirect()->route('customers.show', ['customer' => $customer, 'modal' => 1]);
+            return redirect()->route($showRoute, ['customer' => $customer, 'modal' => 1]);
         }
 
-        return redirect()->route('customers.show', $customer);
+        return redirect()->route($showRoute, $customer);
     }
 
     private function redirectToList(Request $request)
