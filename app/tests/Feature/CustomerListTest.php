@@ -53,6 +53,21 @@ class CustomerListTest extends TestCase
         $response->assertDontSee('メモ検索対象外');
     }
 
+    public function test_customer_search_form_hides_region_filter_and_chip_buttons(): void
+    {
+        Customer::create($this->customerData());
+
+        $response = $this->get('/opnavi/admin/customers');
+
+        $response->assertOk();
+        $response->assertSee('事業者名・住所・営業メモ');
+        $response->assertDontSee('name="region"', false);
+        $response->assertDontSee('class="chips"', false);
+        $response->assertDontSee('chip=not_started', false);
+        $response->assertDontSee('chip=today', false);
+        $response->assertDontSee('chip=overdue', false);
+    }
+
     public function test_inline_owner_update_returns_to_customer_list(): void
     {
         $owner = User::factory()->create(['name' => '砂澤', 'is_active' => true]);

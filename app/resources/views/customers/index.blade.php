@@ -28,17 +28,8 @@
     <div class="list-layout">
         <form class="filters" method="get" action="{{ route($indexRoute) }}">
             <label>
-                事業者名・都道府県・住所・営業メモ
+                事業者名・住所・営業メモ
                 <input type="search" name="keyword" value="{{ $filters['keyword'] ?? '' }}" placeholder="検索">
-            </label>
-            <label>
-                都道府県
-                <select name="region">
-                    <option value="">すべて</option>
-                    @foreach ($regions as $region)
-                        <option value="{{ $region }}" @selected(($filters['region'] ?? '') === $region)>{{ $region }}</option>
-                    @endforeach
-                </select>
             </label>
             <label>
                 担当者
@@ -86,13 +77,6 @@
                 <div class="filter-actions">
                     <button class="button primary" type="submit">検索</button>
                     <a class="button" href="{{ route($indexRoute) }}">条件をクリア</a>
-                </div>
-                <div class="chips">
-                    <a href="{{ route($indexRoute, array_merge(request()->except('page'), ['chip' => 'not_started'])) }}">未対応</a>
-                    <a href="{{ route($indexRoute, array_merge(request()->except('page'), ['chip' => 'today'])) }}">本日対応</a>
-                    <a href="{{ route($indexRoute, array_merge(request()->except('page'), ['chip' => 'overdue'])) }}">期限切れ</a>
-                    <a href="{{ route($indexRoute, array_merge(request()->except('page'), ['chip' => 'unassigned'])) }}">未担当</a>
-                    <a href="{{ route($indexRoute, array_merge(request()->except('page'), ['chip' => 'has_ota'])) }}">OTA掲載あり</a>
                 </div>
             </div>
         </form>
