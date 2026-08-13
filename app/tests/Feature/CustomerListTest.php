@@ -68,6 +68,41 @@ class CustomerListTest extends TestCase
         $response->assertDontSee('chip=overdue', false);
     }
 
+    public function test_customer_table_headers_show_sort_links(): void
+    {
+        $owner = User::factory()->create(['name' => '砂澤', 'is_active' => true]);
+        Customer::create($this->customerData([
+            'business_name' => '陶芸の事業者',
+            'owner_id' => $owner->id,
+        ]));
+
+        $response = $this->get('/opnavi/admin/customers?keyword=陶芸&owner_id='.$owner->id.'&per_page=50');
+
+        $response->assertOk();
+        $response->assertSee('掲載OTA数');
+        $response->assertSee('最終アクション');
+        $response->assertSee('次回アクション');
+        $response->assertDontSee('class="sortable-header is-sorted"', false);
+        $response->assertSee('<span class="sortable-header__arrows" aria-hidden="true">↑↓</span>', false);
+        $response->assertSee('sort_by=ota_count&amp;sort_order=asc', false);
+        $response->assertSee('sort_by=last_action_at&amp;sort_order=asc', false);
+        $response->assertSee('sort_by=next_action_at&amp;sort_order=asc', false);
+        $response->assertSee('keyword=%E9%99%B6%E8%8A%B8', false);
+
+        $response = $this->get('/opnavi/admin/customers?sort_by=ota_count&sort_order=asc');
+
+        $response->assertOk();
+        $response->assertSee('掲載OTA数');
+        $response->assertSee('<span class="sortable-header__arrows" aria-hidden="true">↑</span>', false);
+        $response->assertSee('sort_by=ota_count&amp;sort_order=desc', false);
+
+        $response = $this->get('/opnavi/admin/customers?keyword=陶芸&sort_by=ota_count&sort_order=desc');
+
+        $response->assertOk();
+        $response->assertSee('<span class="sortable-header__arrows" aria-hidden="true">↓</span>', false);
+        $response->assertSee('href="http://localhost:8080/opnavi/admin/customers?keyword=%E9%99%B6%E8%8A%B8"', false);
+    }
+
     public function test_inline_owner_update_returns_to_customer_list(): void
     {
         $owner = User::factory()->create(['name' => '砂澤', 'is_active' => true]);

@@ -4,6 +4,15 @@
         $indexRoute = $isUserScreen ? 'user.customers.index' : 'customers.index';
         $showRoute = $isUserScreen ? 'user.customers.show' : 'customers.show';
         $updateRoute = $isUserScreen ? 'user.customers.update' : 'customers.update';
+        $currentSortBy = $filters['sort_by'] ?? 'next_action_at';
+        $currentSortOrder = $filters['sort_order'] ?? 'asc';
+        $activeHeaderSortBy = request()->filled('sort_by') ? $currentSortBy : null;
+        $nextSortOrder = fn (string $sortBy) => $activeHeaderSortBy === $sortBy && $currentSortOrder === 'asc' ? 'desc' : 'asc';
+        $nextSortUrlParams = fn (string $sortBy) => $activeHeaderSortBy === $sortBy && $currentSortOrder === 'desc'
+            ? request()->except('page', 'sort_by', 'sort_order')
+            : array_merge(request()->except('page', 'sort_by', 'sort_order'), ['sort_by' => $sortBy, 'sort_order' => $nextSortOrder($sortBy)]);
+        $sortIndicator = fn (string $sortBy) => $activeHeaderSortBy === $sortBy ? ($currentSortOrder === 'asc' ? ' ↑' : ' ↓') : '';
+        $sortUrl = fn (string $sortBy) => route($indexRoute, $nextSortUrlParams($sortBy));
     @endphp
 
     <div class="page-header">
@@ -85,7 +94,7 @@
             <div class="toast success">{{ session('status') }}</div>
         @endif
 
-        <section class="table-panel">
+        <section class="table-panel" data-customer-list-panel>
             @if ($customers->count() === 0)
                 <div class="empty-state">
                     @if (request()->query())
@@ -130,12 +139,27 @@
                                 <th class="registered-col">登録日</th>
                                 <th>都道府県</th>
                                 <th>店舗</th>
-                                <th>掲載OTA数</th>
+                                <th @class(['sortable-header', 'is-sorted' => $activeHeaderSortBy === 'ota_count'])>
+                                    <a class="sortable-header__link" href="{{ $sortUrl('ota_count') }}" data-customer-sort-link aria-label="掲載OTA数を{{ $nextSortOrder('ota_count') === 'asc' ? '昇順' : '降順' }}で並び替え">
+                                        <span>掲載OTA数</span>
+                                        <span class="sortable-header__arrows" aria-hidden="true">{{ $activeHeaderSortBy === 'ota_count' ? trim($sortIndicator('ota_count')) : '↑↓' }}</span>
+                                    </a>
+                                </th>
                                 <th>リクエスト予約</th>
                                 <th class="status-col">ステータス</th>
                                 <th class="owner-col">担当者</th>
-                                <th>最終アクション</th>
-                                <th>次回アクション</th>
+                                <th @class(['sortable-header', 'is-sorted' => $activeHeaderSortBy === 'last_action_at'])>
+                                    <a class="sortable-header__link" href="{{ $sortUrl('last_action_at') }}" data-customer-sort-link aria-label="最終アクションを{{ $nextSortOrder('last_action_at') === 'asc' ? '昇順' : '降順' }}で並び替え">
+                                        <span>最終アクション</span>
+                                        <span class="sortable-header__arrows" aria-hidden="true">{{ $activeHeaderSortBy === 'last_action_at' ? trim($sortIndicator('last_action_at')) : '↑↓' }}</span>
+                                    </a>
+                                </th>
+                                <th @class(['sortable-header', 'is-sorted' => $activeHeaderSortBy === 'next_action_at'])>
+                                    <a class="sortable-header__link" href="{{ $sortUrl('next_action_at') }}" data-customer-sort-link aria-label="次回アクションを{{ $nextSortOrder('next_action_at') === 'asc' ? '昇順' : '降順' }}で並び替え">
+                                        <span>次回アクション</span>
+                                        <span class="sortable-header__arrows" aria-hidden="true">{{ $activeHeaderSortBy === 'next_action_at' ? trim($sortIndicator('next_action_at')) : '↑↓' }}</span>
+                                    </a>
+                                </th>
                             </tr>
                         </thead>
                         <tbody>

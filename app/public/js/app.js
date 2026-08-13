@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeDateTimePickers(document);
     initializeComingSoon();
     initializeCustomerDrawer();
+    initializeCustomerSortLinks(document);
     initializeImportModal();
     initializeBulkOwnerForm();
     initializeSubmitGuards(document);
@@ -64,6 +65,70 @@ function initializeCustomerDrawer() {
 
     document.querySelectorAll('[data-drawer-close]').forEach((button) => {
         button.addEventListener('click', closeDrawerWithGuard);
+    });
+}
+
+function initializeCustomerSortLinks(scope) {
+    scope.querySelectorAll('[data-customer-sort-link]').forEach((link) => {
+        if (link.dataset.customerSortBound === 'true') {
+            return;
+        }
+
+        link.dataset.customerSortBound = 'true';
+        link.addEventListener('click', async (event) => {
+            event.preventDefault();
+            await sortCustomerList(link.href);
+        });
+    });
+}
+
+async function sortCustomerList(url) {
+    const panel = document.querySelector('[data-customer-list-panel]');
+    if (! panel || panel.dataset.loading === 'true') {
+        return;
+    }
+
+    if (hasUnsavedDrawerChanges() && ! window.confirm('保存していない変更があります。並び替えを実行しますか？')) {
+        return;
+    }
+
+    panel.dataset.loading = 'true';
+    panel.setAttribute('aria-busy', 'true');
+
+    try {
+        const response = await fetch(url, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        });
+
+        if (! response.ok) {
+            throw new Error('一覧の並び替えに失敗しました。時間をおいて再度お試しください。');
+        }
+
+        const html = await response.text();
+        const nextDocument = new DOMParser().parseFromString(html, 'text/html');
+        const nextPanel = nextDocument.querySelector('[data-customer-list-panel]');
+
+        if (! nextPanel) {
+            throw new Error('一覧の更新に必要なHTMLが見つかりませんでした。');
+        }
+
+        panel.replaceWith(nextPanel);
+        window.history.pushState({}, '', url);
+        initializeCustomerListPanel(nextPanel);
+    } catch (error) {
+        alert(error.message);
+        panel.dataset.loading = 'false';
+        panel.removeAttribute('aria-busy');
+    }
+}
+
+function initializeCustomerListPanel(scope) {
+    initializeCustomerSortLinks(scope);
+    initializeListDatePickers(scope);
+    initializeSubmitGuards(scope);
+    initializeBulkOwnerForm();
+    scope.querySelectorAll('[data-drawer-url]').forEach((link) => {
+        bindDrawerLink(link);
     });
 }
 

@@ -389,6 +389,31 @@ textarea {
     z-index: 1;
 }
 
+.customer-table th.sortable-header {
+    padding: 0;
+    transition: background 0.15s ease;
+}
+
+.customer-table th.sortable-header:hover {
+    background: #eef4ff;
+}
+
+.sortable-header__link {
+    align-items: center;
+    color: inherit;
+    display: flex;
+    gap: 6px;
+    min-height: 40px;
+    padding: 10px;
+    text-decoration: none;
+    width: 100%;
+}
+
+.sortable-header__arrows {
+    color: var(--primary);
+    font-size: 11px;
+}
+
 .select-col {
     position: sticky;
     left: 0;
