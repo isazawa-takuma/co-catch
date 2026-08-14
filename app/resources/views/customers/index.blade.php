@@ -137,8 +137,8 @@
                                 @endunless
                                 <th class="sticky-col">事業者名</th>
                                 <th class="registered-col">登録日</th>
-                                <th>都道府県</th>
-                                <th>店舗</th>
+                                <th class="region-col">都道府県</th>
+                                <th class="area-col">店舗</th>
                                 <th @class(['sortable-header', 'is-sorted' => $activeHeaderSortBy === 'ota_count'])>
                                     <a class="sortable-header__link" href="{{ $sortUrl('ota_count') }}" data-customer-sort-link aria-label="掲載OTA数を{{ $nextSortOrder('ota_count') === 'asc' ? '昇順' : '降順' }}で並び替え">
                                         <span>掲載OTA数</span>
@@ -179,8 +179,8 @@
                                         </div>
                                     </td>
                                     <td class="registered-col">{{ optional($customer->registered_at)->format('Y/m/d') }}</td>
-                                    <td>{{ $customer->region }}</td>
-                                    <td>{{ $customer->area_name }}</td>
+                                    <td class="region-col">{{ $customer->region }}</td>
+                                    <td class="area-col">{{ $customer->area_name }}</td>
                                     <td>{{ $customer->ota_count }}</td>
                                     <td>{{ $customer->request_booking_status }}</td>
                                     <td class="status-col">

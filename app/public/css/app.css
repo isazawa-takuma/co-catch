@@ -385,8 +385,18 @@ textarea {
     color: var(--muted);
     font-size: 12px;
     position: sticky;
+    text-align: center;
     top: 0;
     z-index: 1;
+}
+
+.customer-table tbody td {
+    text-align: center;
+}
+
+.customer-table tbody td.sticky-col,
+.customer-table tbody td.area-col {
+    text-align: left;
 }
 
 .customer-table th.sortable-header {
@@ -403,6 +413,7 @@ textarea {
     color: inherit;
     display: flex;
     gap: 6px;
+    justify-content: center;
     min-height: 40px;
     padding: 10px;
     text-decoration: none;
@@ -445,6 +456,15 @@ textarea {
 
 .registered-col {
     min-width: 104px;
+}
+
+.customer-table .region-col {
+    min-width: 116px;
+    text-align: center;
+}
+
+.area-col {
+    min-width: 180px;
 }
 
 .customer-table tbody tr.is-drawer-active .sticky-col {
@@ -571,6 +591,7 @@ th.sticky-col {
     display: flex;
     align-items: center;
     gap: 6px;
+    justify-content: center;
 }
 
 .date-inline input {
