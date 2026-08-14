@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeCustomerDrawer();
     initializeCustomerSortLinks(document);
     initializeImportModal();
+    initializeUserInviteModal();
     initializeBulkOwnerForm();
     initializeSubmitGuards(document);
     initializeActivityCollapse(document);
@@ -1211,6 +1212,53 @@ function closeImportModal() {
     modal.querySelector('[data-import-errors]')?.remove();
     modal.querySelector('[data-import-form]')?.reset();
     unlockPageScroll();
+}
+
+function initializeUserInviteModal() {
+    const modal = document.querySelector('[data-user-invite-modal]');
+    if (! modal) {
+        return;
+    }
+
+    document.querySelector('[data-user-invite-open]')?.addEventListener('click', () => {
+        openUserInviteModal();
+    });
+
+    document.querySelectorAll('[data-user-invite-close]').forEach((button) => {
+        button.addEventListener('click', () => {
+            closeUserInviteModal();
+        });
+    });
+}
+
+function openUserInviteModal() {
+    const modal = document.querySelector('[data-user-invite-modal]');
+    if (! modal) {
+        return;
+    }
+
+    modal.querySelector('[data-user-invite-password]').value = generateInitialPassword();
+    modal.hidden = false;
+    lockPageScroll();
+}
+
+function closeUserInviteModal() {
+    const modal = document.querySelector('[data-user-invite-modal]');
+    if (! modal) {
+        return;
+    }
+
+    modal.hidden = true;
+    modal.querySelector('[data-user-invite-form]')?.reset();
+    unlockPageScroll();
+}
+
+function generateInitialPassword() {
+    const characters = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+    const bytes = new Uint32Array(12);
+    window.crypto.getRandomValues(bytes);
+
+    return Array.from(bytes, (byte) => characters[byte % characters.length]).join('');
 }
 
 function lockPageScroll() {

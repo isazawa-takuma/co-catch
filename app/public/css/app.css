@@ -1568,6 +1568,12 @@ th.sticky-col {
     gap: 14px;
 }
 
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
 .checkbox {
     display: flex !important;
     grid-template-columns: auto 1fr;
