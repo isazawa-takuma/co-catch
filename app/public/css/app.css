@@ -278,14 +278,28 @@ textarea {
 
 .filters {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    grid-template-columns: auto minmax(320px, 2fr) minmax(150px, 1fr) auto;
     align-items: end;
     gap: 12px;
     padding: 14px;
 }
 
-.filters label:first-child {
-    grid-column: span 2;
+.filters__keyword {
+    grid-column: auto;
+}
+
+.today-action-button {
+    align-self: end;
+    background: #f97316;
+    border-color: #ea580c;
+    color: #fff;
+    font-weight: 700;
+    justify-self: start;
+    white-space: nowrap;
+}
+
+.today-action-button:hover {
+    background: #ea580c;
 }
 
 .filter-actions {
@@ -1641,7 +1655,7 @@ th.sticky-col {
         align-items: stretch;
     }
 
-    .filters label:first-child {
+    .filters__keyword {
         grid-column: auto;
     }
 

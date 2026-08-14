@@ -36,7 +36,8 @@
 
     <div class="list-layout">
         <form class="filters" method="get" action="{{ route($indexRoute) }}">
-            <label>
+            <a class="button today-action-button" href="{{ route($indexRoute, array_merge(request()->except('page', 'chip'), ['today_action' => 1])) }}">当日対応</a>
+            <label class="filters__keyword">
                 事業者名・住所・営業メモ
                 <input type="search" name="keyword" value="{{ $filters['keyword'] ?? '' }}" placeholder="検索">
             </label>

@@ -53,6 +53,34 @@ class CustomerListTest extends TestCase
         $response->assertDontSee('メモ検索対象外');
     }
 
+    public function test_today_action_button_filters_customers_to_today_next_action(): void
+    {
+        $today = now()->toDateString();
+        $tomorrow = now()->addDay()->toDateString();
+
+        Customer::create($this->customerData([
+            'business_name' => '当日対応顧客',
+            'next_action_at' => $today,
+        ]));
+        Customer::create($this->customerData([
+            'business_name' => '明日対応顧客',
+            'next_action_at' => $tomorrow,
+            'address' => '埼玉県さいたま市2-2-2',
+        ]));
+
+        $response = $this->get('/opnavi/admin/customers');
+
+        $response->assertOk();
+        $response->assertSee('当日対応');
+        $response->assertSee('today_action=1', false);
+
+        $response = $this->get('/opnavi/admin/customers?today_action=1');
+
+        $response->assertOk();
+        $response->assertSee('当日対応顧客');
+        $response->assertDontSee('明日対応顧客');
+    }
+
     public function test_customer_search_form_hides_region_filter_and_chip_buttons(): void
     {
         Customer::create($this->customerData());
