@@ -25,6 +25,7 @@
                     <a href="{{ route($customerIndexRoute) }}" class="{{ request()->routeIs('customers.*') || request()->routeIs('user.customers.*') ? 'active' : '' }}">一覧画面</a>
                     @unless ($isUserScreen)
                         <a href="{{ route('dashboard') }}" class="{{ request()->routeIs('dashboard') ? 'active' : '' }}">営業ダッシュボード</a>
+                        <a href="{{ route('admin.user-management.index') }}" class="{{ request()->routeIs('admin.user-management.*') ? 'active' : '' }}">ユーザー管理</a>
                     @endunless
                 </nav>
             </aside>

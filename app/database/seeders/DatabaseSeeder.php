@@ -18,14 +18,9 @@ class DatabaseSeeder extends Seeder
      */
     public function run()
     {
-        $sunazawa = User::updateOrCreate(
-            ['email' => 'sunazawa@example.local'],
-            ['name' => '砂澤', 'password' => Hash::make('password'), 'role' => 'member', 'is_active' => true]
-        );
-
-        $ara = User::updateOrCreate(
-            ['email' => 'ara@example.local'],
-            ['name' => '荒', 'password' => Hash::make('password'), 'role' => 'member', 'is_active' => true]
+        $admin = User::updateOrCreate(
+            ['email' => 'admin@example.local'],
+            ['name' => '管理者', 'password' => Hash::make('password'), 'role' => 'admin', 'is_active' => true]
         );
 
         if (Customer::count() === 0) {
@@ -45,7 +40,7 @@ class DatabaseSeeder extends Seeder
                 'monthly_open_days' => 20,
                 'request_booking_status' => 'あり',
                 'status' => '未対応',
-                'owner_id' => $sunazawa->id,
+                'owner_id' => $admin->id,
                 'next_action_at' => now()->toDateString(),
             ]);
 

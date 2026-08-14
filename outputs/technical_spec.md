@@ -198,7 +198,7 @@ php artisan test
 | `remember_token` | string | yes | Laravel標準 |
 | `created_at` / `updated_at` | timestamp | yes | 作成・更新日時 |
 
-初期Seederでは `砂澤` と `荒` を作成します。
+初期Seederでは、管理者ユーザーとして `管理者` を1件作成します。
 
 ### 5.2 `opnavi_customers`
 

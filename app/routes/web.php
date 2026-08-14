@@ -3,6 +3,7 @@
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\UserManagementController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -28,6 +29,7 @@ Route::get('/opnavi/customers/{customer}', fn (Request $request, string $custome
 ));
 
 Route::get('/opnavi/admin/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+Route::get('/opnavi/admin/user_management', [UserManagementController::class, 'index'])->name('admin.user-management.index');
 Route::get('/opnavi/admin/customers', [CustomerController::class, 'index'])->name('customers.index');
 Route::post('/opnavi/admin/customers/import', [CustomerController::class, 'import'])->name('customers.import');
 Route::patch('/opnavi/admin/customers/bulk-owner', [CustomerController::class, 'bulkUpdateOwner'])->name('customers.bulk-owner');
