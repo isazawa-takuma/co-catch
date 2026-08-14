@@ -66,6 +66,9 @@ class CustomerListTest extends TestCase
         $response->assertDontSee('chip=not_started', false);
         $response->assertDontSee('chip=today', false);
         $response->assertDontSee('chip=overdue', false);
+        $response->assertDontSee('name="sort_by"', false);
+        $response->assertDontSee('name="sort_order"', false);
+        $response->assertDontSee('name="per_page"', false);
     }
 
     public function test_customer_table_headers_show_sort_links(): void
@@ -238,7 +241,6 @@ class CustomerListTest extends TestCase
 
         $response->assertOk();
         $response->assertSeeInOrder(['近い顧客', '未設定顧客']);
-        $response->assertSee('value="next_action_at" selected', false);
         $response->assertDontSee('value="registered_at"', false);
     }
 

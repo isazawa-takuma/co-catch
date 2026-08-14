@@ -41,44 +41,11 @@
                 <input type="search" name="keyword" value="{{ $filters['keyword'] ?? '' }}" placeholder="検索">
             </label>
             <label>
-                担当者
-                <select name="owner_id">
-                    <option value="">すべて</option>
-                    @foreach ($users as $user)
-                        <option value="{{ $user->id }}" @selected((string)($filters['owner_id'] ?? '') === (string)$user->id)>{{ $user->name }}</option>
-                    @endforeach
-                </select>
-            </label>
-            <label>
                 ステータス
                 <select name="status">
                     <option value="">すべて</option>
                     @foreach ($statuses as $status)
                         <option value="{{ $status }}" @selected(($filters['status'] ?? '') === $status)>{{ $status }}</option>
-                    @endforeach
-                </select>
-            </label>
-            <label>
-                並び替え
-                <select name="sort_by">
-                    <option value="next_action_at" @selected(($filters['sort_by'] ?? 'next_action_at') === 'next_action_at')>次回アクション日</option>
-                    <option value="last_action_at" @selected(($filters['sort_by'] ?? '') === 'last_action_at')>最終アクション日</option>
-                    <option value="ota_count" @selected(($filters['sort_by'] ?? '') === 'ota_count')>掲載OTA数</option>
-                    <option value="status" @selected(($filters['sort_by'] ?? '') === 'status')>ステータス</option>
-                </select>
-            </label>
-            <label>
-                順序
-                <select name="sort_order">
-                    <option value="asc" @selected(($filters['sort_order'] ?? 'asc') === 'asc')>近い順 / 昇順</option>
-                    <option value="desc" @selected(($filters['sort_order'] ?? '') === 'desc')>遠い順 / 降順</option>
-                </select>
-            </label>
-            <label>
-                表示件数
-                <select name="per_page">
-                    @foreach ([25, 50, 100] as $size)
-                        <option value="{{ $size }}" @selected((int)($filters['per_page'] ?? 25) === $size)>{{ $size }}件</option>
                     @endforeach
                 </select>
             </label>
