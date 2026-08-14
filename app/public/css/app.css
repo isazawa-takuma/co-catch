@@ -278,7 +278,7 @@ textarea {
 
 .filters {
     display: grid;
-    grid-template-columns: auto minmax(320px, 2fr) minmax(150px, 1fr) auto;
+    grid-template-columns: auto minmax(150px, 180px) minmax(320px, 2fr) auto;
     align-items: end;
     gap: 12px;
     padding: 14px;

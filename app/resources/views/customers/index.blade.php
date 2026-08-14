@@ -37,10 +37,6 @@
     <div class="list-layout">
         <form class="filters" method="get" action="{{ route($indexRoute) }}">
             <a class="button today-action-button" href="{{ route($indexRoute, ['today_action' => 1]) }}">当日対応</a>
-            <label class="filters__keyword">
-                事業者名・住所・営業メモ
-                <input type="search" name="keyword" value="{{ $filters['keyword'] ?? '' }}" placeholder="検索">
-            </label>
             <label>
                 ステータス
                 <select name="status">
@@ -49,6 +45,10 @@
                         <option value="{{ $status }}" @selected(($filters['status'] ?? '') === $status)>{{ $status }}</option>
                     @endforeach
                 </select>
+            </label>
+            <label class="filters__keyword">
+                事業者名・住所・営業メモ
+                <input type="search" name="keyword" value="{{ $filters['keyword'] ?? '' }}" placeholder="検索">
             </label>
             <div class="filter-actions">
                 <button class="button primary" type="submit">検索</button>
