@@ -292,6 +292,10 @@ textarea {
     flex-wrap: wrap;
 }
 
+.filters > .filter-actions {
+    align-self: end;
+}
+
 .filters label,
 .detail-form label,
 .activity-form label,

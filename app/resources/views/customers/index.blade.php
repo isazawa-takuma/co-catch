@@ -49,11 +49,9 @@
                     @endforeach
                 </select>
             </label>
-            <div class="filter-footer">
-                <div class="filter-actions">
-                    <button class="button primary" type="submit">検索</button>
-                    <a class="button" href="{{ route($indexRoute) }}">条件をクリア</a>
-                </div>
+            <div class="filter-actions">
+                <button class="button primary" type="submit">検索</button>
+                <a class="button" href="{{ route($indexRoute) }}">条件をクリア</a>
             </div>
         </form>
 
