@@ -74,6 +74,13 @@ class CustomerListTest extends TestCase
         $response->assertSee('当日対応');
         $response->assertSee('today_action=1', false);
 
+        $response = $this->get('/opnavi/admin/customers?keyword=明日&status=やり取り中');
+
+        $response->assertOk();
+        $response->assertSee('href="http://localhost:8080/opnavi/admin/customers?today_action=1"', false);
+        $response->assertDontSee('today_action=1&amp;keyword=', false);
+        $response->assertDontSee('today_action=1&amp;status=', false);
+
         $response = $this->get('/opnavi/admin/customers?today_action=1');
 
         $response->assertOk();
