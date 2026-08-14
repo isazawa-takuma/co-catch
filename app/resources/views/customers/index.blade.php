@@ -47,7 +47,7 @@
                 </select>
             </label>
             <label class="filters__keyword">
-                事業者名・住所・営業メモ
+                事業者名・電話番号・住所・営業メモ
                 <input type="search" name="keyword" value="{{ $filters['keyword'] ?? '' }}" placeholder="検索">
             </label>
             <div class="filter-actions">

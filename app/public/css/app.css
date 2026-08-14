@@ -319,6 +319,7 @@ textarea {
     gap: 6px;
     color: var(--muted);
     font-size: 13px;
+    min-width: 0;
 }
 
 .filter-footer {
@@ -1455,6 +1456,15 @@ th.sticky-col {
 }
 
 @media (max-width: 1120px) {
+    .filters {
+        grid-template-columns: auto minmax(150px, 180px) minmax(220px, 1fr);
+    }
+
+    .filters > .filter-actions {
+        grid-column: 1 / -1;
+        justify-self: end;
+    }
+
     .detail-grid {
         grid-template-columns: 1fr;
     }

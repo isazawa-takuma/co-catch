@@ -5,6 +5,7 @@ namespace App\Services\Opnavi;
 use App\Models\Customer;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 
 class CustomerQueryService
@@ -70,14 +71,7 @@ class CustomerQueryService
     private function applyFilters(Builder $query, Request $request): void
     {
         if ($keyword = trim((string) $request->input('keyword'))) {
-            $query->where(function ($inner) use ($keyword) {
-                $inner->where('business_name', 'like', "%{$keyword}%")
-                    ->orWhere('region', 'like', "%{$keyword}%")
-                    ->orWhere('address', 'like', "%{$keyword}%")
-                    ->orWhere('area_name', 'like', "%{$keyword}%")
-                    ->orWhere('experience_title', 'like', "%{$keyword}%")
-                    ->orWhere('sales_memo', 'like', "%{$keyword}%");
-            });
+            $this->applyKeywordFilter($query, $keyword);
         }
 
         foreach (['region', 'status', 'owner_id'] as $field) {
@@ -99,6 +93,53 @@ class CustomerQueryService
         } elseif ($request->input('chip') === 'not_started') {
             $query->where('status', '未対応');
         }
+    }
+
+    private function applyKeywordFilter(Builder $query, string $keyword): void
+    {
+        foreach ($this->keywordTerms($keyword) as $term) {
+            $query->where(function (Builder $inner) use ($term) {
+                if ($this->shouldUseFullText($term)) {
+                    $inner->whereRaw(
+                        'MATCH (business_name, address, sales_memo) AGAINST (? IN BOOLEAN MODE)',
+                        [$this->booleanPhrase($term)]
+                    );
+                } else {
+                    $this->applyTextLikeKeywordFilter($inner, $term);
+                }
+
+                $this->applyPhoneKeywordFilter($inner, $term);
+            });
+        }
+    }
+
+    private function keywordTerms(string $keyword): array
+    {
+        return preg_split('/\s+/u', trim($keyword), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    }
+
+    private function shouldUseFullText(string $term): bool
+    {
+        return DB::connection()->getDriverName() === 'mysql' && mb_strlen($term) > 1;
+    }
+
+    private function booleanPhrase(string $term): string
+    {
+        return '+"'.str_replace(['\\', '"'], ['\\\\', '\"'], $term).'"';
+    }
+
+    private function applyTextLikeKeywordFilter(Builder $query, string $term): void
+    {
+        $query->where('business_name', 'like', "%{$term}%")
+            ->orWhere('address', 'like', "%{$term}%")
+            ->orWhere('sales_memo', 'like', "%{$term}%");
+    }
+
+    private function applyPhoneKeywordFilter(Builder $query, string $term): void
+    {
+        $query->orWhere('head_office_phone', 'like', "%{$term}%")
+            ->orWhere('public_phone', 'like', "%{$term}%")
+            ->orWhere('contact_phone', 'like', "%{$term}%");
     }
 
     private function applySort(Builder $query, Request $request): void

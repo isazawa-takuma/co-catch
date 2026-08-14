@@ -53,6 +53,64 @@ class CustomerListTest extends TestCase
         $response->assertDontSee('メモ検索対象外');
     }
 
+    public function test_customers_can_be_filtered_by_phone_keyword(): void
+    {
+        Customer::create($this->customerData([
+            'business_name' => '電話検索対象',
+            'public_phone' => '050-1234-5678',
+        ]));
+        Customer::create($this->customerData([
+            'business_name' => '電話検索対象外',
+            'address' => '埼玉県川口市1-2-3',
+            'public_phone' => '050-9999-9999',
+        ]));
+
+        $response = $this->get('/opnavi/admin/customers?keyword=1234');
+
+        $response->assertOk();
+        $response->assertSee('電話検索対象');
+        $response->assertDontSee('電話検索対象外');
+    }
+
+    public function test_keyword_search_uses_and_for_space_separated_terms(): void
+    {
+        Customer::create($this->customerData([
+            'business_name' => '複数キーワード検索対象',
+            'address' => '東京都渋谷区1-2-3',
+            'sales_memo' => '次回は資料送付について確認する',
+        ]));
+        Customer::create($this->customerData([
+            'business_name' => '住所だけ一致',
+            'address' => '東京都渋谷区4-5-6',
+            'sales_memo' => '通常の営業メモ',
+        ]));
+        Customer::create($this->customerData([
+            'business_name' => 'メモだけ一致',
+            'address' => '大阪府大阪市1-2-3',
+            'sales_memo' => '次回は資料送付について確認する',
+        ]));
+
+        $response = $this->get('/opnavi/admin/customers?keyword='.urlencode('東京都 資料送付'));
+
+        $response->assertOk();
+        $response->assertSee('複数キーワード検索対象');
+        $response->assertDontSee('住所だけ一致');
+        $response->assertDontSee('メモだけ一致');
+    }
+
+    public function test_experience_title_is_not_in_keyword_search_targets(): void
+    {
+        Customer::create($this->customerData([
+            'business_name' => '体験内容だけ一致',
+            'experience_title' => '陶芸ろくろ体験',
+        ]));
+
+        $response = $this->get('/opnavi/admin/customers?keyword=ろくろ');
+
+        $response->assertOk();
+        $response->assertDontSee('体験内容だけ一致');
+    }
+
     public function test_today_action_button_filters_customers_to_today_next_action(): void
     {
         $today = now()->toDateString();
@@ -95,7 +153,7 @@ class CustomerListTest extends TestCase
         $response = $this->get('/opnavi/admin/customers');
 
         $response->assertOk();
-        $response->assertSee('事業者名・住所・営業メモ');
+        $response->assertSee('事業者名・電話番号・住所・営業メモ');
         $response->assertDontSee('name="region"', false);
         $response->assertDontSee('class="chips"', false);
         $response->assertDontSee('chip=not_started', false);
