@@ -137,9 +137,31 @@ class CustomerQueryService
 
     private function applyPhoneKeywordFilter(Builder $query, string $term): void
     {
-        $query->orWhere('head_office_phone', 'like', "%{$term}%")
-            ->orWhere('public_phone', 'like', "%{$term}%")
-            ->orWhere('contact_phone', 'like', "%{$term}%");
+        $normalizedTerm = $this->normalizePhoneKeyword($term);
+
+        if ($normalizedTerm === '') {
+            return;
+        }
+
+        foreach (['head_office_phone', 'public_phone', 'contact_phone'] as $column) {
+            $query->orWhereRaw($this->normalizedPhoneColumnExpression($column).' like ?', ["%{$normalizedTerm}%"]);
+        }
+    }
+
+    private function normalizePhoneKeyword(string $term): string
+    {
+        return preg_replace('/\D+/u', '', $term) ?? '';
+    }
+
+    private function normalizedPhoneColumnExpression(string $column): string
+    {
+        $expression = $column;
+
+        foreach (['-', ' ', '　', '(', ')'] as $character) {
+            $expression = "REPLACE({$expression}, '{$character}', '')";
+        }
+
+        return $expression;
     }
 
     private function applySort(Builder $query, Request $request): void

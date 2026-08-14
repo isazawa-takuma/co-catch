@@ -288,6 +288,25 @@ textarea {
     grid-column: auto;
 }
 
+.list-toolbar {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.per-page-control {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: auto;
+    color: var(--muted);
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.per-page-control select {
+    width: 110px;
+}
+
 .today-action-button {
     align-self: end;
     background: #f97316;

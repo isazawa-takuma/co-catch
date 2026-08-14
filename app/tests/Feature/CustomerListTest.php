@@ -57,7 +57,7 @@ class CustomerListTest extends TestCase
     {
         Customer::create($this->customerData([
             'business_name' => '電話検索対象',
-            'public_phone' => '050-1234-5678',
+            'public_phone' => '050-7109-1331',
         ]));
         Customer::create($this->customerData([
             'business_name' => '電話検索対象外',
@@ -65,11 +65,13 @@ class CustomerListTest extends TestCase
             'public_phone' => '050-9999-9999',
         ]));
 
-        $response = $this->get('/opnavi/admin/customers?keyword=1234');
+        foreach (['050-7109-1331', '05071091331', '050 7109 1331', '7109', '71091331'] as $keyword) {
+            $response = $this->get('/opnavi/admin/customers?keyword='.urlencode($keyword));
 
-        $response->assertOk();
-        $response->assertSee('電話検索対象');
-        $response->assertDontSee('電話検索対象外');
+            $response->assertOk();
+            $response->assertSee('電話検索対象');
+            $response->assertDontSee('電話検索対象外');
+        }
     }
 
     public function test_keyword_search_uses_and_for_space_separated_terms(): void
@@ -161,7 +163,8 @@ class CustomerListTest extends TestCase
         $response->assertDontSee('chip=overdue', false);
         $response->assertDontSee('name="sort_by"', false);
         $response->assertDontSee('name="sort_order"', false);
-        $response->assertDontSee('name="per_page"', false);
+        $response->assertSee('name="per_page"', false);
+        $response->assertSee('aria-label="表示件数"', false);
     }
 
     public function test_customer_table_headers_show_sort_links(): void

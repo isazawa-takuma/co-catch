@@ -13,6 +13,11 @@
             : array_merge(request()->except('page', 'sort_by', 'sort_order'), ['sort_by' => $sortBy, 'sort_order' => $nextSortOrder($sortBy)]);
         $sortIndicator = fn (string $sortBy) => $activeHeaderSortBy === $sortBy ? ($currentSortOrder === 'asc' ? ' ↑' : ' ↓') : '';
         $sortUrl = fn (string $sortBy) => route($indexRoute, $nextSortUrlParams($sortBy));
+        $toolbarQuery = request()->except('page', 'per_page', 'sort_by', 'sort_order');
+        if (in_array(request('sort_by'), ['last_action_at', 'next_action_at', 'ota_count', 'status'], true)) {
+            $toolbarQuery['sort_by'] = $currentSortBy;
+            $toolbarQuery['sort_order'] = $currentSortOrder;
+        }
     @endphp
 
     <div class="page-header">
@@ -54,6 +59,21 @@
                 <button class="button primary" type="submit">検索</button>
                 <a class="button" href="{{ route($indexRoute) }}">条件をクリア</a>
             </div>
+        </form>
+
+        <form class="list-toolbar" method="get" action="{{ route($indexRoute) }}">
+            @foreach ($toolbarQuery as $name => $value)
+                @if (is_scalar($value))
+                    <input type="hidden" name="{{ $name }}" value="{{ $value }}">
+                @endif
+            @endforeach
+            <label class="per-page-control" aria-label="表示件数">
+                <select name="per_page" onchange="this.form.submit()">
+                    @foreach ([25, 50, 100] as $perPage)
+                        <option value="{{ $perPage }}" @selected((int) ($filters['per_page'] ?? 25) === $perPage)>{{ $perPage }}件</option>
+                    @endforeach
+                </select>
+            </label>
         </form>
 
         @if (session('status'))
