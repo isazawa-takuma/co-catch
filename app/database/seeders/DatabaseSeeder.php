@@ -20,7 +20,15 @@ class DatabaseSeeder extends Seeder
     {
         $admin = User::updateOrCreate(
             ['email' => 'admin@example.local'],
-            ['name' => '管理者', 'password' => Hash::make('password'), 'role' => 'admin', 'is_active' => true]
+            [
+                'name' => '管理者',
+                'last_name' => '管理',
+                'first_name' => '者',
+                'password' => Hash::make('password'),
+                'role' => 'admin',
+                'is_active' => true,
+                'must_change_password' => false,
+            ]
         );
 
         if (Customer::count() === 0) {

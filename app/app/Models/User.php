@@ -19,10 +19,13 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'name',
+        'last_name',
+        'first_name',
         'email',
         'password',
         'role',
         'is_active',
+        'must_change_password',
     ];
 
     /**
@@ -43,6 +46,7 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'is_active' => 'boolean',
+        'must_change_password' => 'boolean',
     ];
 
     public function customers()

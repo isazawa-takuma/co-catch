@@ -17,7 +17,7 @@ class UserManagementTest extends TestCase
 
     public function test_admin_sidebar_links_to_user_management(): void
     {
-        $response = $this->get('/opnavi/admin/customers');
+        $response = $this->actingAs($this->adminUser())->get('/opnavi/admin/customers');
 
         $response->assertOk();
         $response->assertSee('ユーザー管理');
@@ -28,7 +28,7 @@ class UserManagementTest extends TestCase
     {
         Customer::create($this->customerData());
 
-        $response = $this->get('/opnavi/user/customers');
+        $response = $this->actingAs($this->salesUser())->get('/opnavi/user/customers');
 
         $response->assertOk();
         $response->assertDontSee('ユーザー管理');
@@ -49,7 +49,7 @@ class UserManagementTest extends TestCase
             'is_active' => false,
         ]);
 
-        $response = $this->get('/opnavi/admin/user_management');
+        $response = $this->actingAs($this->adminUser())->get('/opnavi/admin/user_management');
 
         $response->assertOk();
         $response->assertSee('ユーザー管理');
@@ -80,7 +80,7 @@ class UserManagementTest extends TestCase
     {
         Mail::fake();
 
-        $response = $this->post('/opnavi/admin/user_management', [
+        $response = $this->actingAs($this->adminUser())->post('/opnavi/admin/user_management', [
             'email' => 'new-user@illuvia-inc.com',
             'initial_password' => 'Passw0rd123',
             'role' => 'sales',
@@ -93,6 +93,7 @@ class UserManagementTest extends TestCase
         $this->assertSame('new-user@illuvia-inc.com', $user->name);
         $this->assertSame('sales', $user->role);
         $this->assertTrue($user->is_active);
+        $this->assertTrue($user->must_change_password);
         $this->assertTrue(Hash::check('Passw0rd123', $user->password));
 
         Mail::assertSent(UserInvitationMail::class, function (UserInvitationMail $mail) use ($user) {
@@ -107,7 +108,7 @@ class UserManagementTest extends TestCase
     {
         Mail::fake();
 
-        $response = $this->from('/opnavi/admin/user_management')->post('/opnavi/admin/user_management', [
+        $response = $this->actingAs($this->adminUser())->from('/opnavi/admin/user_management')->post('/opnavi/admin/user_management', [
             'email' => 'new-user@example.com',
             'initial_password' => 'Passw0rd123',
             'role' => 'sales',
@@ -118,7 +119,7 @@ class UserManagementTest extends TestCase
         $this->assertDatabaseMissing('users', ['email' => 'new-user@example.com']);
         Mail::assertNothingSent();
 
-        $page = $this->get('/opnavi/admin/user_management');
+        $page = $this->actingAs($this->adminUser())->get('/opnavi/admin/user_management');
 
         $page->assertOk();
         $page->assertSee('data-user-invite-modal', false);
@@ -132,7 +133,7 @@ class UserManagementTest extends TestCase
             ->with('failed-user@illuvia-inc.com')
             ->andThrow(new RuntimeException('mail failed'));
 
-        $response = $this->post('/opnavi/admin/user_management', [
+        $response = $this->actingAs($this->adminUser())->post('/opnavi/admin/user_management', [
             'email' => 'failed-user@illuvia-inc.com',
             'initial_password' => 'Passw0rd123',
             'role' => 'admin',
@@ -160,5 +161,23 @@ class UserManagementTest extends TestCase
             'request_booking_status' => 'あり',
             'status' => '未対応',
         ], $overrides);
+    }
+
+    private function adminUser(): User
+    {
+        return User::factory()->create([
+            'role' => 'admin',
+            'is_active' => true,
+            'must_change_password' => false,
+        ]);
+    }
+
+    private function salesUser(): User
+    {
+        return User::factory()->create([
+            'role' => 'sales',
+            'is_active' => true,
+            'must_change_password' => false,
+        ]);
     }
 }

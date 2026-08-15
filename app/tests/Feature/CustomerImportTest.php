@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Customer;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
@@ -10,6 +11,17 @@ use Tests\TestCase;
 class CustomerImportTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->actingAs(User::factory()->create([
+            'role' => 'admin',
+            'is_active' => true,
+            'must_change_password' => false,
+        ]));
+    }
 
     public function test_csv_import_creates_customers_and_skips_short_open_days(): void
     {
@@ -27,12 +39,14 @@ class CustomerImportTest extends TestCase
         $response->assertRedirect('/opnavi/admin/customers');
         $response->assertSessionHas('status', 'sample.csvのインポートに成功しました（営業日数12日未満のため1件をスキップしました）');
 
+        $owner = User::where('name', '砂澤')->firstOrFail();
+
         $this->assertDatabaseHas('opnavi_customers', [
             'business_name' => '取込対象事業者',
             'address' => '埼玉県さいたま市1-2-3',
             'store_count' => 3,
             'monthly_open_days' => 20,
-            'owner_id' => 1,
+            'owner_id' => $owner->id,
         ]);
         $this->assertDatabaseHas('opnavi_ota_links', [
             'ota_name' => 'じゃらん',

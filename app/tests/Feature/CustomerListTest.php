@@ -11,6 +11,13 @@ class CustomerListTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->actingAs($this->adminUser());
+    }
+
     public function test_customers_can_be_filtered_by_region_and_owner(): void
     {
         $owner = User::factory()->create(['name' => '砂澤', 'is_active' => true]);
@@ -416,6 +423,7 @@ class CustomerListTest extends TestCase
 
     public function test_user_customer_list_hides_admin_only_actions(): void
     {
+        $this->actingAs($this->salesUser());
         Customer::create($this->customerData());
 
         $response = $this->get('/opnavi/user/customers');
@@ -430,6 +438,8 @@ class CustomerListTest extends TestCase
 
     public function test_user_customer_brand_link_keeps_user_service_flow(): void
     {
+        $this->actingAs($this->salesUser());
+
         $listResponse = $this->get('/opnavi/user/customers');
 
         $listResponse->assertOk();
@@ -444,6 +454,7 @@ class CustomerListTest extends TestCase
 
     public function test_user_customer_detail_hides_basic_edit_and_delete_actions(): void
     {
+        $this->actingAs($this->salesUser());
         $customer = Customer::create($this->customerData());
 
         $response = $this->get('/opnavi/user/customers/'.$customer->id);
@@ -460,6 +471,7 @@ class CustomerListTest extends TestCase
 
     public function test_user_customer_detail_updates_only_allowed_fields(): void
     {
+        $this->actingAs($this->salesUser());
         $owner = User::factory()->create(['name' => '砂澤', 'is_active' => true]);
         $customer = Customer::create($this->customerData([
             'business_name' => '変更前事業者',
@@ -505,5 +517,23 @@ class CustomerListTest extends TestCase
             'request_booking_status' => 'あり',
             'status' => '未対応',
         ], $overrides);
+    }
+
+    private function adminUser(): User
+    {
+        return User::factory()->create([
+            'role' => 'admin',
+            'is_active' => true,
+            'must_change_password' => false,
+        ]);
+    }
+
+    private function salesUser(): User
+    {
+        return User::factory()->create([
+            'role' => 'sales',
+            'is_active' => true,
+            'must_change_password' => false,
+        ]);
     }
 }

@@ -36,6 +36,7 @@ class UserManagementController extends Controller
                     'password' => Hash::make($validated['initial_password']),
                     'role' => $validated['role'],
                     'is_active' => true,
+                    'must_change_password' => true,
                 ]);
 
                 Mail::to($user->email)->send(new UserInvitationMail(
