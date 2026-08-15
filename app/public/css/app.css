@@ -65,7 +65,8 @@ textarea {
 }
 
 .is-sidebar-collapsed .sidebar__nav a,
-.is-sidebar-collapsed .brand {
+.is-sidebar-collapsed .brand,
+.is-sidebar-collapsed .sidebar-user__menu summary {
     font-size: 0;
 }
 
@@ -77,6 +78,8 @@ textarea {
     background: #111827;
     color: #fff;
     padding: 16px 12px;
+    display: flex;
+    flex-direction: column;
 }
 
 .sidebar__head {
@@ -109,6 +112,80 @@ textarea {
 
 .sidebar__nav a.active,
 .sidebar__nav a:hover {
+    background: #263244;
+    color: #fff;
+}
+
+.sidebar-user {
+    margin-top: auto;
+    padding-top: 16px;
+}
+
+.sidebar-user__menu {
+    position: relative;
+}
+
+.sidebar-user__menu summary {
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    border-radius: 6px;
+    padding: 0 12px;
+    color: #f9fafb;
+    background: #1f2937;
+    cursor: pointer;
+    list-style: none;
+    font-weight: 700;
+}
+
+.sidebar-user__menu summary::-webkit-details-marker {
+    display: none;
+}
+
+.sidebar-user__menu summary::after {
+    content: "⌃";
+    margin-left: auto;
+    color: #cbd5e1;
+    font-size: 12px;
+}
+
+.sidebar-user__menu[open] summary::after {
+    content: "⌄";
+}
+
+.sidebar-user__actions {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(100% + 8px);
+    display: grid;
+    gap: 4px;
+    padding: 8px;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    background: #0f172a;
+    box-shadow: 0 12px 24px rgba(0, 0, 0, .24);
+    z-index: 2;
+}
+
+.sidebar-user__actions a,
+.sidebar-user__actions button {
+    min-height: 36px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    border: 0;
+    border-radius: 6px;
+    padding: 0 10px;
+    background: transparent;
+    color: #e5e7eb;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.sidebar-user__actions a:hover,
+.sidebar-user__actions button:hover {
     background: #263244;
     color: #fff;
 }

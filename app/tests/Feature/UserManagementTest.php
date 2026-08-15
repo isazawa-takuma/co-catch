@@ -94,6 +94,8 @@ class UserManagementTest extends TestCase
         $this->assertSame('sales', $user->role);
         $this->assertTrue($user->is_active);
         $this->assertTrue($user->must_change_password);
+        $this->assertNotNull($user->initial_password_expires_at);
+        $this->assertTrue($user->initial_password_expires_at->between(now()->addDays(6)->addHours(23), now()->addDays(7)->addMinute()));
         $this->assertTrue(Hash::check('Passw0rd123', $user->password));
 
         Mail::assertSent(UserInvitationMail::class, function (UserInvitationMail $mail) use ($user) {

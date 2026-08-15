@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Mail\UserInvitationMail;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
@@ -122,7 +123,114 @@ class LoginPageTest extends TestCase
         $this->assertSame('真', $user->first_name);
         $this->assertSame('五十嵐 真', $user->name);
         $this->assertFalse($user->must_change_password);
+        $this->assertNull($user->initial_password_expires_at);
         $this->assertTrue(\Illuminate\Support\Facades\Hash::check('Newpass123', $user->password));
+    }
+
+    public function test_expired_initial_password_cannot_login(): void
+    {
+        User::factory()->create([
+            'email' => 'expired-sales@illuvia-inc.com',
+            'role' => 'sales',
+            'last_name' => null,
+            'first_name' => null,
+            'must_change_password' => true,
+            'initial_password_expires_at' => now()->subMinute(),
+        ]);
+
+        $response = $this->from('/opnavi/user/login')->post('/opnavi/user/login', [
+            'email' => 'expired-sales@illuvia-inc.com',
+            'password' => 'password',
+        ]);
+
+        $response->assertRedirect('/opnavi/user/login');
+        $response->assertSessionHasErrors('email');
+        $this->assertGuest();
+    }
+
+    public function test_initial_setup_page_is_displayed_without_sidebar(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'sales',
+            'last_name' => null,
+            'first_name' => null,
+            'must_change_password' => true,
+        ]);
+
+        $response = $this->actingAs($user)->get('/opnavi/initial_setup');
+
+        $response->assertOk();
+        $response->assertSee('初回設定');
+        $response->assertDontSee('一覧画面');
+        $response->assertDontSee('営業ダッシュボード');
+        $response->assertDontSee('ユーザー管理');
+    }
+
+    public function test_sidebar_shows_user_menu_with_logout_and_password_change(): void
+    {
+        $user = User::factory()->create([
+            'name' => '管理者',
+            'role' => 'admin',
+        ]);
+
+        $response = $this->actingAs($user)->get('/opnavi/admin/customers');
+
+        $response->assertOk();
+        $response->assertSee('管理者');
+        $response->assertSee('パスワード変更');
+        $response->assertSee(route('password.edit'), false);
+        $response->assertSee('ログアウト');
+        $response->assertSee(route('logout'), false);
+        $response->assertSee('data-confirm-submit="ログアウトしますか？"', false);
+    }
+
+    public function test_logout_redirects_to_role_login_page(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'sales',
+        ]);
+
+        $response = $this->actingAs($user)->post('/opnavi/logout');
+
+        $response->assertRedirect('/opnavi/user/login');
+        $this->assertGuest();
+    }
+
+    public function test_password_can_be_changed(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'admin',
+        ]);
+
+        $response = $this->actingAs($user)->post('/opnavi/password/change', [
+            'current_password' => 'password',
+            'password' => 'Newpass123',
+            'password_confirmation' => 'Newpass123',
+        ]);
+
+        $response->assertRedirect('/opnavi/admin/customers');
+
+        $user->refresh();
+        $this->assertTrue(Hash::check('Newpass123', $user->password));
+    }
+
+    public function test_password_change_requires_current_password(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'admin',
+        ]);
+
+        $response = $this->actingAs($user)->from('/opnavi/password/change')->post('/opnavi/password/change', [
+            'current_password' => 'wrong-password',
+            'password' => 'Newpass123',
+            'password_confirmation' => 'Newpass123',
+        ]);
+
+        $response->assertRedirect('/opnavi/password/change');
+        $response->assertSessionHasErrors('current_password');
+
+        $user->refresh();
+        $this->assertTrue(Hash::check('password', $user->password));
     }
 
     public function test_guest_is_redirected_from_initial_setup_to_login(): void
@@ -133,6 +241,20 @@ class LoginPageTest extends TestCase
 
         $login = $this->get('/login');
         $login->assertRedirect('/opnavi/admin/login');
+    }
+
+    public function test_guest_user_area_redirects_to_user_login(): void
+    {
+        $response = $this->get('/opnavi/user/customers');
+
+        $response->assertRedirect('/opnavi/user/login');
+    }
+
+    public function test_guest_admin_area_redirects_to_admin_login(): void
+    {
+        $response = $this->get('/opnavi/admin/customers');
+
+        $response->assertRedirect('/opnavi/admin/login');
     }
 
     public function test_sales_can_login_from_user_login_page(): void

@@ -67,6 +67,16 @@ class LoginController extends Controller
                 ->withErrors(['email' => 'このログイン画面を利用できない権限です。']);
         }
 
+        if ($this->isInitialPasswordExpired(Auth::user())) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return back()
+                ->withInput($request->only('email'))
+                ->withErrors(['email' => '初期パスワードの有効期限が切れています。管理者に再発行を依頼してください。']);
+        }
+
         if ($this->requiresInitialSetup(Auth::user())) {
             return redirect()->route('initial-setup.edit');
         }
@@ -94,14 +104,55 @@ class LoginController extends Controller
             'name' => $validated['last_name'].' '.$validated['first_name'],
             'password' => Hash::make($validated['password']),
             'must_change_password' => false,
+            'initial_password_expires_at' => null,
         ])->save();
 
         return redirect()->route($this->homeRouteForRole($user->role));
     }
 
+    public function editPassword()
+    {
+        return view('auth.password');
+    }
+
+    public function updatePassword(Request $request)
+    {
+        $validated = $request->validate([
+            'current_password' => ['required', 'current_password'],
+            'password' => ['required', 'confirmed', Password::min(8)->letters()->numbers()],
+        ]);
+
+        $user = Auth::user();
+        $user->forceFill([
+            'password' => Hash::make($validated['password']),
+        ])->save();
+
+        return redirect()
+            ->route($this->homeRouteForRole($user->role))
+            ->with('status', 'パスワードを変更しました。');
+    }
+
+    public function logout(Request $request)
+    {
+        $loginRoute = Auth::user()?->role === 'admin' ? 'admin.login' : 'user.login';
+
+        Auth::logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return redirect()->route($loginRoute);
+    }
+
     private function requiresInitialSetup($user): bool
     {
         return $user->must_change_password || blank($user->last_name) || blank($user->first_name);
+    }
+
+    private function isInitialPasswordExpired($user): bool
+    {
+        return $user->must_change_password
+            && $user->initial_password_expires_at
+            && $user->initial_password_expires_at->isPast();
     }
 
     private function homeRouteForRole(string $role): string

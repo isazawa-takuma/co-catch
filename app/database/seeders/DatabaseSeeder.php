@@ -28,6 +28,7 @@ class DatabaseSeeder extends Seeder
                 'role' => 'admin',
                 'is_active' => true,
                 'must_change_password' => false,
+                'initial_password_expires_at' => null,
             ]
         );
 

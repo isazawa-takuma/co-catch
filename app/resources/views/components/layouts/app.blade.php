@@ -10,8 +10,8 @@
 </head>
 <body>
     @php
-        $isUserScreen = request()->routeIs('user.*');
-        $showsSidebar = request()->is('opnavi*') && ! request()->routeIs('admin.login', 'user.login');
+        $isUserScreen = request()->routeIs('user.*') || in_array(auth()->user()?->role, ['appointment', 'sales'], true);
+        $showsSidebar = request()->is('opnavi*') && ! request()->routeIs('admin.login', 'user.login', 'initial-setup.*');
         $customerIndexRoute = $isUserScreen ? 'user.customers.index' : 'customers.index';
         $homeRoute = $isUserScreen ? 'user.home' : 'home';
     @endphp
@@ -29,6 +29,20 @@
                         <a href="{{ route('admin.user-management.index') }}" class="{{ request()->routeIs('admin.user-management.*') ? 'active' : '' }}">ユーザー管理</a>
                     @endunless
                 </nav>
+                @auth
+                    <div class="sidebar-user">
+                        <details class="sidebar-user__menu">
+                            <summary>{{ auth()->user()->name }}</summary>
+                            <div class="sidebar-user__actions">
+                                <a href="{{ route('password.edit') }}">パスワード変更</a>
+                                <form method="post" action="{{ route('logout') }}" data-confirm-submit="ログアウトしますか？">
+                                    @csrf
+                                    <button type="submit">ログアウト</button>
+                                </form>
+                            </div>
+                        </details>
+                    </div>
+                @endauth
             </aside>
         @endif
 

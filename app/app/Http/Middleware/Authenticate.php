@@ -15,6 +15,14 @@ class Authenticate extends Middleware
     protected function redirectTo($request)
     {
         if (! $request->expectsJson()) {
+            if ($request->is('opnavi/user*')) {
+                return route('user.login');
+            }
+
+            if ($request->is('opnavi/admin*')) {
+                return route('admin.login');
+            }
+
             return route('login');
         }
     }

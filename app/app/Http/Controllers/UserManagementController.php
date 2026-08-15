@@ -37,6 +37,7 @@ class UserManagementController extends Controller
                     'role' => $validated['role'],
                     'is_active' => true,
                     'must_change_password' => true,
+                    'initial_password_expires_at' => now()->addWeek(),
                 ]);
 
                 Mail::to($user->email)->send(new UserInvitationMail(

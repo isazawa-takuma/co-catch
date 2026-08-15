@@ -29,6 +29,11 @@ Route::get('/opnavi/user/login', [LoginController::class, 'user'])->name('user.l
 Route::post('/opnavi/user/login', [LoginController::class, 'authenticateUser'])->name('user.login.submit');
 Route::get('/opnavi/initial_setup', [LoginController::class, 'editInitialSetup'])->middleware('auth')->name('initial-setup.edit');
 Route::post('/opnavi/initial_setup', [LoginController::class, 'updateInitialSetup'])->middleware('auth')->name('initial-setup.update');
+Route::post('/opnavi/logout', [LoginController::class, 'logout'])->middleware('auth')->name('logout');
+Route::middleware(['auth', 'initial.setup'])->group(function () {
+    Route::get('/opnavi/password/change', [LoginController::class, 'editPassword'])->name('password.edit');
+    Route::post('/opnavi/password/change', [LoginController::class, 'updatePassword'])->name('password.update');
+});
 $missingCustomer = function (Request $request) {
     $message = '対象の顧客が見つかりません。別タブで削除された可能性があります。一覧を再読み込みしてください。';
 

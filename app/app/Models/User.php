@@ -26,6 +26,7 @@ class User extends Authenticatable
         'role',
         'is_active',
         'must_change_password',
+        'initial_password_expires_at',
     ];
 
     /**
@@ -47,6 +48,7 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
         'is_active' => 'boolean',
         'must_change_password' => 'boolean',
+        'initial_password_expires_at' => 'datetime',
     ];
 
     public function customers()
