@@ -4,7 +4,11 @@ namespace Tests\Feature;
 
 use App\Models\Customer;
 use App\Models\User;
+use App\Mail\UserInvitationMail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
+use RuntimeException;
 use Tests\TestCase;
 
 class UserManagementTest extends TestCase
@@ -51,6 +55,7 @@ class UserManagementTest extends TestCase
         $response->assertSee('ユーザー管理');
         $response->assertSee('追加');
         $response->assertSee('data-user-invite-modal', false);
+        $response->assertSee(route('admin.user-management.store'), false);
         $response->assertSee('name="email"', false);
         $response->assertSee('name="initial_password"', false);
         $response->assertSee('data-user-invite-password', false);
@@ -69,6 +74,74 @@ class UserManagementTest extends TestCase
         $response->assertSee('user@example.com');
         $response->assertSee('有効');
         $response->assertSee('停止中');
+    }
+
+    public function test_user_invitation_creates_user_and_sends_mail(): void
+    {
+        Mail::fake();
+
+        $response = $this->post('/opnavi/admin/user_management', [
+            'email' => 'new-user@illuvia-inc.com',
+            'initial_password' => 'Passw0rd123',
+            'role' => 'sales',
+        ]);
+
+        $response->assertRedirect('/opnavi/admin/user_management');
+        $response->assertSessionHas('status', 'ユーザーを追加し、招待メールを送信しました。');
+
+        $user = User::where('email', 'new-user@illuvia-inc.com')->firstOrFail();
+        $this->assertSame('new-user@illuvia-inc.com', $user->name);
+        $this->assertSame('sales', $user->role);
+        $this->assertTrue($user->is_active);
+        $this->assertTrue(Hash::check('Passw0rd123', $user->password));
+
+        Mail::assertSent(UserInvitationMail::class, function (UserInvitationMail $mail) use ($user) {
+            return $mail->hasTo('new-user@illuvia-inc.com')
+                && $mail->user->is($user)
+                && $mail->initialPassword === 'Passw0rd123'
+                && $mail->loginUrl === url('/opnavi/user/login');
+        });
+    }
+
+    public function test_user_invitation_requires_illuvia_email_domain(): void
+    {
+        Mail::fake();
+
+        $response = $this->from('/opnavi/admin/user_management')->post('/opnavi/admin/user_management', [
+            'email' => 'new-user@example.com',
+            'initial_password' => 'Passw0rd123',
+            'role' => 'sales',
+        ]);
+
+        $response->assertRedirect('/opnavi/admin/user_management');
+        $response->assertSessionHasErrors('email');
+        $this->assertDatabaseMissing('users', ['email' => 'new-user@example.com']);
+        Mail::assertNothingSent();
+
+        $page = $this->get('/opnavi/admin/user_management');
+
+        $page->assertOk();
+        $page->assertSee('data-user-invite-modal', false);
+        $page->assertDontSee('data-user-invite-modal hidden', false);
+    }
+
+    public function test_user_invitation_rolls_back_user_when_mail_sending_fails(): void
+    {
+        Mail::shouldReceive('to')
+            ->once()
+            ->with('failed-user@illuvia-inc.com')
+            ->andThrow(new RuntimeException('mail failed'));
+
+        $response = $this->post('/opnavi/admin/user_management', [
+            'email' => 'failed-user@illuvia-inc.com',
+            'initial_password' => 'Passw0rd123',
+            'role' => 'admin',
+        ]);
+
+        $response->assertRedirect('/opnavi/admin/user_management');
+        $response->assertSessionHas('error', '招待メールの送信に失敗しました。メール設定を確認してから再度お試しください。');
+        $response->assertSessionHas('open_user_invite', true);
+        $this->assertDatabaseMissing('users', ['email' => 'failed-user@illuvia-inc.com']);
     }
 
     private function customerData(array $overrides = []): array

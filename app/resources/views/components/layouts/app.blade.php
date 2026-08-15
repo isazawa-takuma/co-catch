@@ -11,11 +11,12 @@
 <body>
     @php
         $isUserScreen = request()->routeIs('user.*');
+        $showsSidebar = request()->is('opnavi*') && ! request()->routeIs('admin.login', 'user.login');
         $customerIndexRoute = $isUserScreen ? 'user.customers.index' : 'customers.index';
         $homeRoute = $isUserScreen ? 'user.home' : 'home';
     @endphp
-    <div class="app-shell {{ request()->is('opnavi*') ? 'has-sidebar' : '' }}" data-shell>
-        @if (request()->is('opnavi*'))
+    <div class="app-shell {{ $showsSidebar ? 'has-sidebar' : '' }}" data-shell>
+        @if ($showsSidebar)
             <aside class="sidebar" data-sidebar>
                 <div class="sidebar__head">
                     <a class="brand" href="{{ route($homeRoute) }}">コキャッチ</a>
