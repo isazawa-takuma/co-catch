@@ -527,6 +527,70 @@ textarea {
     text-align: center;
 }
 
+.customer-table .row-menu-col {
+    width: 48px;
+    min-width: 48px;
+    text-align: center;
+}
+
+.row-action-menu {
+    position: relative;
+    display: inline-block;
+}
+
+.row-action-menu summary {
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    color: var(--muted);
+    cursor: pointer;
+    list-style: none;
+    font-size: 22px;
+    line-height: 1;
+}
+
+.row-action-menu summary::-webkit-details-marker {
+    display: none;
+}
+
+.row-action-menu summary:hover,
+.row-action-menu[open] summary {
+    background: var(--surface-2);
+    color: var(--text);
+}
+
+.row-action-menu__items {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    z-index: 3;
+    width: 190px;
+    padding: 6px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--surface);
+    box-shadow: 0 12px 24px rgba(15, 23, 42, .16);
+}
+
+.row-action-menu__items button {
+    width: 100%;
+    min-height: 34px;
+    border: 0;
+    border-radius: 6px;
+    padding: 0 10px;
+    background: transparent;
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+}
+
+.row-action-menu__items button:hover {
+    background: var(--surface-2);
+}
+
 .customer-table tbody td.sticky-col,
 .customer-table tbody td.area-col {
     text-align: left;

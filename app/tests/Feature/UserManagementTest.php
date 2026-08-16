@@ -74,7 +74,9 @@ class UserManagementTest extends TestCase
         $response->assertSee('user@example.com');
         $response->assertSee('有効');
         $response->assertSee('停止中');
-        $response->assertSee('再発行');
+        $response->assertDontSee('<th>操作</th>', false);
+        $response->assertSee('class="row-action-menu"', false);
+        $response->assertSee('初期パスワード再発行');
         $response->assertSee(route('admin.user-management.reissue', User::where('email', 'admin@example.com')->firstOrFail()), false);
         $response->assertSee('data-confirm-submit="admin@example.com の初期パスワードを再発行しますか？"', false);
     }

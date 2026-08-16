@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeCustomerSortLinks(document);
     initializeImportModal();
     initializeUserInviteModal();
+    initializeRowActionMenus();
     initializeBulkOwnerForm();
     initializeSubmitGuards(document);
     initializeActivityCollapse(document);
@@ -34,6 +35,32 @@ function initializeSidebar() {
     document.querySelectorAll('[data-sidebar-toggle]').forEach((button) => {
         button.addEventListener('click', () => {
             document.querySelector('[data-shell]')?.classList.toggle('is-sidebar-collapsed');
+        });
+    });
+}
+
+function initializeRowActionMenus() {
+    if (window.rowActionMenusBound === true) {
+        return;
+    }
+
+    window.rowActionMenusBound = true;
+
+    document.addEventListener('click', (event) => {
+        document.querySelectorAll('.row-action-menu[open]').forEach((menu) => {
+            if (! menu.contains(event.target)) {
+                menu.removeAttribute('open');
+            }
+        });
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') {
+            return;
+        }
+
+        document.querySelectorAll('.row-action-menu[open]').forEach((menu) => {
+            menu.removeAttribute('open');
         });
     });
 }
