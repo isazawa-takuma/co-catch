@@ -12,6 +12,10 @@ class LoginController extends Controller
 {
     public function admin()
     {
+        if (Auth::check()) {
+            return redirect()->route($this->routeForAuthenticatedUser(Auth::user()));
+        }
+
         return view('auth.login', [
             'screen' => 'admin',
             'title' => '管理者ログイン',
@@ -23,6 +27,10 @@ class LoginController extends Controller
 
     public function user()
     {
+        if (Auth::check()) {
+            return redirect()->route($this->routeForAuthenticatedUser(Auth::user()));
+        }
+
         return view('auth.login', [
             'screen' => 'user',
             'title' => 'ユーザーログイン',
@@ -158,5 +166,14 @@ class LoginController extends Controller
     private function homeRouteForRole(string $role): string
     {
         return $role === 'admin' ? 'customers.index' : 'user.customers.index';
+    }
+
+    private function routeForAuthenticatedUser($user): string
+    {
+        if ($this->requiresInitialSetup($user)) {
+            return 'initial-setup.edit';
+        }
+
+        return $this->homeRouteForRole($user->role);
     }
 }

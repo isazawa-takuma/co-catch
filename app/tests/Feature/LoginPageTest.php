@@ -257,6 +257,53 @@ class LoginPageTest extends TestCase
         $response->assertRedirect('/opnavi/admin/login');
     }
 
+    public function test_authenticated_admin_login_page_redirects_to_admin_customers(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'admin',
+        ]);
+
+        $response = $this->actingAs($user)->get('/opnavi/admin/login');
+
+        $response->assertRedirect('/opnavi/admin/customers');
+    }
+
+    public function test_authenticated_sales_login_page_redirects_to_user_customers(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'sales',
+        ]);
+
+        $response = $this->actingAs($user)->get('/opnavi/user/login');
+
+        $response->assertRedirect('/opnavi/user/customers');
+    }
+
+    public function test_authenticated_appointment_login_page_redirects_to_user_customers(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'appointment',
+        ]);
+
+        $response = $this->actingAs($user)->get('/opnavi/user/login');
+
+        $response->assertRedirect('/opnavi/user/customers');
+    }
+
+    public function test_authenticated_initial_setup_user_login_page_redirects_to_initial_setup(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'sales',
+            'last_name' => null,
+            'first_name' => null,
+            'must_change_password' => true,
+        ]);
+
+        $response = $this->actingAs($user)->get('/opnavi/user/login');
+
+        $response->assertRedirect('/opnavi/initial_setup');
+    }
+
     public function test_sales_can_login_from_user_login_page(): void
     {
         $user = User::factory()->create([
