@@ -36,6 +36,7 @@ class UserManagementTest extends TestCase
 
     public function test_user_management_page_lists_users_and_add_button(): void
     {
+        $admin = $this->adminUser();
         User::factory()->create([
             'name' => '管理者',
             'email' => 'admin@example.com',
@@ -49,7 +50,7 @@ class UserManagementTest extends TestCase
             'is_active' => false,
         ]);
 
-        $response = $this->actingAs($this->adminUser())->get('/opnavi/admin/user_management');
+        $response = $this->actingAs($admin)->get('/opnavi/admin/user_management');
 
         $response->assertOk();
         $response->assertSee('ユーザー管理');
@@ -60,6 +61,7 @@ class UserManagementTest extends TestCase
         $response->assertSee('name="initial_password"', false);
         $response->assertSee('data-user-invite-password', false);
         $response->assertDontSee('data-user-invite-password readonly', false);
+        $response->assertSee('最低8文字・英数字混在');
         $response->assertSee('name="role"', false);
         $response->assertSee('value="appointment"', false);
         $response->assertSee('アポイント');
@@ -79,6 +81,13 @@ class UserManagementTest extends TestCase
         $response->assertSee('初期パスワード再発行');
         $response->assertSee(route('admin.user-management.reissue', User::where('email', 'admin@example.com')->firstOrFail()), false);
         $response->assertSee('data-confirm-submit="admin@example.com の初期パスワードを再発行しますか？"', false);
+        $response->assertSee('権限変更');
+        $response->assertSee('無効化');
+        $response->assertSee(route('admin.user-management.role.edit', User::where('email', 'admin@example.com')->firstOrFail()), false);
+        $response->assertDontSee('aria-label="admin@example.com の権限"', false);
+        $response->assertSee(route('admin.user-management.deactivate', User::where('email', 'admin@example.com')->firstOrFail()), false);
+        $response->assertDontSee(route('admin.user-management.role.edit', $admin), false);
+        $response->assertDontSee(route('admin.user-management.deactivate', $admin), false);
     }
 
     public function test_user_invitation_creates_user_and_sends_mail(): void
@@ -207,6 +216,96 @@ class UserManagementTest extends TestCase
         $this->assertSame($originalPassword, $user->password);
         $this->assertFalse($user->must_change_password);
         $this->assertNull($user->initial_password_expires_at);
+    }
+
+    public function test_admin_can_change_user_role(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'role-user@illuvia-inc.com',
+            'role' => 'sales',
+        ]);
+
+        $response = $this->actingAs($this->adminUser())->patch(route('admin.user-management.role', $user), [
+            'role' => 'admin',
+        ]);
+
+        $response->assertRedirect('/opnavi/admin/user_management');
+        $response->assertSessionHas('status', 'role-user@illuvia-inc.com の権限を変更しました。');
+
+        $user->refresh();
+        $this->assertSame('admin', $user->role);
+    }
+
+    public function test_admin_can_open_user_role_edit_page(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'role-edit-user@illuvia-inc.com',
+            'role' => 'sales',
+        ]);
+
+        $response = $this->actingAs($this->adminUser())->get(route('admin.user-management.role.edit', $user));
+
+        $response->assertOk();
+        $response->assertSee('権限変更');
+        $response->assertSee('role-edit-user@illuvia-inc.com');
+        $response->assertSee('name="role"', false);
+        $response->assertSee('適用');
+        $response->assertSee(route('admin.user-management.role', $user), false);
+    }
+
+    public function test_admin_cannot_change_own_role(): void
+    {
+        $admin = $this->adminUser();
+
+        $response = $this->actingAs($admin)->patch(route('admin.user-management.role', $admin), [
+            'role' => 'sales',
+        ]);
+
+        $response->assertRedirect('/opnavi/admin/user_management');
+        $response->assertSessionHas('error', '自分自身の権限は変更できません。');
+
+        $admin->refresh();
+        $this->assertSame('admin', $admin->role);
+    }
+
+    public function test_admin_cannot_open_own_role_edit_page(): void
+    {
+        $admin = $this->adminUser();
+
+        $response = $this->actingAs($admin)->get(route('admin.user-management.role.edit', $admin));
+
+        $response->assertRedirect('/opnavi/admin/user_management');
+        $response->assertSessionHas('error', '自分自身の権限は変更できません。');
+    }
+
+    public function test_admin_can_deactivate_user(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'inactive-user@illuvia-inc.com',
+            'role' => 'sales',
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($this->adminUser())->patch(route('admin.user-management.deactivate', $user));
+
+        $response->assertRedirect('/opnavi/admin/user_management');
+        $response->assertSessionHas('status', 'inactive-user@illuvia-inc.com を無効化しました。');
+
+        $user->refresh();
+        $this->assertFalse($user->is_active);
+    }
+
+    public function test_admin_cannot_deactivate_self(): void
+    {
+        $admin = $this->adminUser();
+
+        $response = $this->actingAs($admin)->patch(route('admin.user-management.deactivate', $admin));
+
+        $response->assertRedirect('/opnavi/admin/user_management');
+        $response->assertSessionHas('error', '自分自身は無効化できません。');
+
+        $admin->refresh();
+        $this->assertTrue($admin->is_active);
     }
 
     private function customerData(array $overrides = []): array

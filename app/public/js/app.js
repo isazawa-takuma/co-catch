@@ -46,6 +46,22 @@ function initializeRowActionMenus() {
 
     window.rowActionMenusBound = true;
 
+    document.addEventListener('toggle', (event) => {
+        const menu = event.target;
+
+        if (! menu.matches?.('.row-action-menu') || ! menu.open) {
+            return;
+        }
+
+        document.querySelectorAll('.row-action-menu[open]').forEach((otherMenu) => {
+            if (otherMenu !== menu) {
+                otherMenu.removeAttribute('open');
+            }
+        });
+
+        positionRowActionMenu(menu);
+    }, true);
+
     document.addEventListener('click', (event) => {
         document.querySelectorAll('.row-action-menu[open]').forEach((menu) => {
             if (! menu.contains(event.target)) {
@@ -63,6 +79,32 @@ function initializeRowActionMenus() {
             menu.removeAttribute('open');
         });
     });
+}
+
+function positionRowActionMenu(menu) {
+    const items = menu.querySelector('.row-action-menu__items');
+    const summary = menu.querySelector('summary');
+    if (! items || ! summary) {
+        return;
+    }
+
+    const margin = 8;
+    const gap = 6;
+    const summaryRect = summary.getBoundingClientRect();
+    const itemWidth = items.offsetWidth || 190;
+    const itemHeight = items.offsetHeight;
+
+    const maxLeft = window.innerWidth - itemWidth - margin;
+    const maxTop = window.innerHeight - itemHeight - margin;
+    const left = Math.max(margin, Math.min(maxLeft, summaryRect.right - itemWidth));
+
+    let top = summaryRect.bottom + gap;
+    if (top + itemHeight + margin > window.innerHeight) {
+        top = summaryRect.top - itemHeight - gap;
+    }
+
+    items.style.left = `${left}px`;
+    items.style.top = `${Math.max(margin, Math.min(maxTop, top))}px`;
 }
 
 function initializeCopyButtons(scope) {

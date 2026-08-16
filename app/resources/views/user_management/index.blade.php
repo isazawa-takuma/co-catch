@@ -41,6 +41,14 @@
                                                 @csrf
                                                 <button type="submit">初期パスワード再発行</button>
                                             </form>
+                                            @unless (auth()->user()->is($user))
+                                                <a href="{{ route('admin.user-management.role.edit', $user) }}">権限変更</a>
+                                                <form method="post" action="{{ route('admin.user-management.deactivate', $user) }}" data-confirm-submit="{{ $user->email }} を無効化しますか？">
+                                                    @csrf
+                                                    @method('patch')
+                                                    <button type="submit">無効化</button>
+                                                </form>
+                                            @endunless
                                         </div>
                                     </details>
                                 </td>
@@ -66,6 +74,7 @@
                 <label>
                     初期パスワード
                     <input type="text" name="initial_password" value="{{ old('initial_password') }}" data-user-invite-password autocomplete="new-password" required minlength="8">
+                    <span class="form-hint">最低8文字・英数字混在</span>
                 </label>
                 <label>
                     権限

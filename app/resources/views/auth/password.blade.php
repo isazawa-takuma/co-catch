@@ -12,6 +12,7 @@
                 <label>
                     新しいパスワード
                     <input type="password" name="password" autocomplete="new-password" required>
+                    <span class="form-hint">最低8文字・英数字混在</span>
                 </label>
                 <label>
                     新しいパスワード 確認

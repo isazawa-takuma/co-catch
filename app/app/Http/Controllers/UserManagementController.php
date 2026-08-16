@@ -89,6 +89,57 @@ class UserManagementController extends Controller
             ->with('status', $user->email.' の初期パスワードを再発行しました。');
     }
 
+    public function editRole(Request $request, User $user)
+    {
+        if ($request->user()->is($user)) {
+            return redirect()
+                ->route('admin.user-management.index')
+                ->with('error', '自分自身の権限は変更できません。');
+        }
+
+        return view('user_management.edit_role', [
+            'user' => $user,
+        ]);
+    }
+
+    public function updateRole(Request $request, User $user)
+    {
+        if ($request->user()->is($user)) {
+            return redirect()
+                ->route('admin.user-management.index')
+                ->with('error', '自分自身の権限は変更できません。');
+        }
+
+        $validated = $request->validate([
+            'role' => ['required', Rule::in(['appointment', 'sales', 'admin'])],
+        ]);
+
+        $user->forceFill([
+            'role' => $validated['role'],
+        ])->save();
+
+        return redirect()
+            ->route('admin.user-management.index')
+            ->with('status', $user->email.' の権限を変更しました。');
+    }
+
+    public function deactivate(Request $request, User $user)
+    {
+        if ($request->user()->is($user)) {
+            return redirect()
+                ->route('admin.user-management.index')
+                ->with('error', '自分自身は無効化できません。');
+        }
+
+        $user->forceFill([
+            'is_active' => false,
+        ])->save();
+
+        return redirect()
+            ->route('admin.user-management.index')
+            ->with('status', $user->email.' を無効化しました。');
+    }
+
     private function loginUrlForRole(string $role): string
     {
         return url($role === 'admin' ? '/opnavi/admin/login' : '/opnavi/user/login');

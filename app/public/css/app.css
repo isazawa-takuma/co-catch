@@ -436,6 +436,11 @@ textarea {
     min-width: 0;
 }
 
+.form-hint {
+    color: var(--muted);
+    font-size: 12px;
+}
+
 .filter-footer {
     grid-column: 1 / -1;
     display: grid;
@@ -563,10 +568,8 @@ textarea {
 }
 
 .row-action-menu__items {
-    position: absolute;
-    right: 0;
-    top: calc(100% + 6px);
-    z-index: 3;
+    position: fixed;
+    z-index: 30;
     width: 190px;
     padding: 6px;
     border: 1px solid var(--line);
@@ -575,18 +578,23 @@ textarea {
     box-shadow: 0 12px 24px rgba(15, 23, 42, .16);
 }
 
+.row-action-menu__items a,
 .row-action-menu__items button {
     width: 100%;
     min-height: 34px;
+    display: flex;
+    align-items: center;
     border: 0;
     border-radius: 6px;
     padding: 0 10px;
     background: transparent;
     color: var(--text);
     text-align: left;
+    text-decoration: none;
     cursor: pointer;
 }
 
+.row-action-menu__items a:hover,
 .row-action-menu__items button:hover {
     background: var(--surface-2);
 }

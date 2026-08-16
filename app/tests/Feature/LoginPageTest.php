@@ -161,6 +161,7 @@ class LoginPageTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('初回設定');
+        $response->assertSee('最低8文字・英数字混在');
         $response->assertDontSee('一覧画面');
         $response->assertDontSee('営業ダッシュボード');
         $response->assertDontSee('ユーザー管理');
@@ -182,6 +183,18 @@ class LoginPageTest extends TestCase
         $response->assertSee('ログアウト');
         $response->assertSee(route('logout'), false);
         $response->assertSee('data-confirm-submit="ログアウトしますか？"', false);
+    }
+
+    public function test_password_change_page_shows_password_rule_hint(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'sales',
+        ]);
+
+        $response = $this->actingAs($user)->get('/opnavi/password/change');
+
+        $response->assertOk();
+        $response->assertSee('最低8文字・英数字混在');
     }
 
     public function test_logout_redirects_to_role_login_page(): void
@@ -350,6 +363,24 @@ class LoginPageTest extends TestCase
         ]);
 
         $response->assertRedirect('/opnavi/admin/login');
+        $response->assertSessionHasErrors('email');
+        $this->assertGuest();
+    }
+
+    public function test_inactive_user_cannot_login(): void
+    {
+        User::factory()->create([
+            'email' => 'inactive@illuvia-inc.com',
+            'role' => 'sales',
+            'is_active' => false,
+        ]);
+
+        $response = $this->from('/opnavi/user/login')->post('/opnavi/user/login', [
+            'email' => 'inactive@illuvia-inc.com',
+            'password' => 'password',
+        ]);
+
+        $response->assertRedirect('/opnavi/user/login');
         $response->assertSessionHasErrors('email');
         $this->assertGuest();
     }

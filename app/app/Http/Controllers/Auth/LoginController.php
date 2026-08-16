@@ -65,6 +65,16 @@ class LoginController extends Controller
 
         $request->session()->regenerate();
 
+        if (! Auth::user()->is_active) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return back()
+                ->withInput($request->only('email'))
+                ->withErrors(['email' => 'このアカウントは無効化されています。管理者にお問い合わせください。']);
+        }
+
         if (! in_array(Auth::user()->role, $allowedRoles, true)) {
             Auth::logout();
             $request->session()->invalidate();
