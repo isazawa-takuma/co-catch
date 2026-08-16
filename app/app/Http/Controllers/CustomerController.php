@@ -135,7 +135,11 @@ class CustomerController extends Controller
             return $response;
         }
 
-        $this->activityService->create($customer, $request->validated());
+        $data = array_merge($request->validated(), [
+            'user_id' => $request->user()->id,
+        ]);
+
+        $this->activityService->create($customer, $data);
 
         return $this->redirectToCustomerDetail($request, $customer, 'user')
             ->with('status', '履歴を登録しました')
@@ -157,7 +161,11 @@ class CustomerController extends Controller
             return $response;
         }
 
-        $this->activityService->update($customer, $activity, $request->validated());
+        $data = array_merge($request->validated(), [
+            'user_id' => $request->user()->id,
+        ]);
+
+        $this->activityService->update($customer, $activity, $data);
 
         return $this->redirectToCustomerDetail($request, $customer, 'user')
             ->with('status', '履歴を更新しました')

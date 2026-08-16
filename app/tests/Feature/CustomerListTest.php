@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Activity;
 use App\Models\Customer;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -495,6 +496,20 @@ class CustomerListTest extends TestCase
         $response->assertDontSee('action="'.route('customers.update', $customer).'"', false);
     }
 
+    public function test_user_customer_activity_name_is_fixed_to_logged_in_user(): void
+    {
+        $user = $this->salesUser();
+        $this->actingAs($user);
+        $customer = Customer::create($this->customerData(['owner_id' => $user->id]));
+
+        $response = $this->get('/opnavi/user/customers/'.$customer->id);
+
+        $response->assertOk();
+        $response->assertSee('<input type="hidden" name="user_id" value="'.$user->id.'">', false);
+        $response->assertSee('<input type="text" value="'.$user->name.'" disabled>', false);
+        $response->assertDontSee('<select name="user_id" required>', false);
+    }
+
     public function test_user_customer_detail_updates_only_allowed_fields(): void
     {
         $owner = $this->salesUser();
@@ -580,6 +595,68 @@ class CustomerListTest extends TestCase
         $this->assertDatabaseMissing('opnavi_activities', [
             'customer_id' => $customer->id,
             'memo' => '登録されてはいけない履歴',
+        ]);
+    }
+
+    public function test_user_customer_activity_registration_uses_logged_in_user(): void
+    {
+        $user = $this->salesUser();
+        $otherUser = $this->salesUser();
+        $this->actingAs($user);
+        $customer = Customer::create($this->customerData(['owner_id' => $user->id]));
+
+        $response = $this->post('/opnavi/user/customers/'.$customer->id.'/activities', [
+            'action_at' => '2026-07-20 10:30:00',
+            'user_id' => $otherUser->id,
+            'contact_person' => '山田',
+            'contact_status' => '担当者',
+            'status' => '商談中',
+            'memo' => 'ログインユーザーで登録',
+        ]);
+
+        $response->assertRedirect('/opnavi/user/customers/'.$customer->id);
+        $this->assertDatabaseHas('opnavi_activities', [
+            'customer_id' => $customer->id,
+            'user_id' => $user->id,
+            'memo' => 'ログインユーザーで登録',
+        ]);
+        $this->assertDatabaseMissing('opnavi_activities', [
+            'customer_id' => $customer->id,
+            'user_id' => $otherUser->id,
+            'memo' => 'ログインユーザーで登録',
+        ]);
+    }
+
+    public function test_user_customer_activity_update_uses_logged_in_user(): void
+    {
+        $user = $this->salesUser();
+        $otherUser = $this->salesUser();
+        $this->actingAs($user);
+        $customer = Customer::create($this->customerData(['owner_id' => $user->id]));
+        $activity = Activity::create([
+            'customer_id' => $customer->id,
+            'action_at' => '2026-07-20 10:30:00',
+            'user_id' => $otherUser->id,
+            'contact_person' => '山田',
+            'contact_status' => '担当者',
+            'status' => '商談中',
+            'memo' => '更新前メモ',
+        ]);
+
+        $response = $this->patch('/opnavi/user/customers/'.$customer->id.'/activities/'.$activity->id, [
+            'action_at' => '2026-07-21 11:00:00',
+            'user_id' => $otherUser->id,
+            'contact_person' => '佐藤',
+            'contact_status' => '代表',
+            'status' => '契約',
+            'memo' => 'ログインユーザーで更新',
+        ]);
+
+        $response->assertRedirect('/opnavi/user/customers/'.$customer->id);
+        $this->assertDatabaseHas('opnavi_activities', [
+            'id' => $activity->id,
+            'user_id' => $user->id,
+            'memo' => 'ログインユーザーで更新',
         ]);
     }
 

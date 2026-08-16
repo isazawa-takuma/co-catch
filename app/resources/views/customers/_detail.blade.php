@@ -321,11 +321,16 @@
         </label>
         <label>
             名前
-            <select name="user_id" required>
-                @foreach ($users as $user)
-                    <option value="{{ $user->id }}" @selected($customer->owner_id === $user->id)>{{ $user->name }}</option>
-                @endforeach
-            </select>
+            @if ($isUserScreen)
+                <input type="hidden" name="user_id" value="{{ auth()->id() }}">
+                <input type="text" value="{{ auth()->user()->name }}" disabled>
+            @else
+                <select name="user_id" required>
+                    @foreach ($users as $user)
+                        <option value="{{ $user->id }}" @selected($customer->owner_id === $user->id)>{{ $user->name }}</option>
+                    @endforeach
+                </select>
+            @endif
         </label>
         <label>
             担当者
@@ -403,7 +408,7 @@
                         <input type="hidden" name="modal" value="1">
                     @endif
                     <input type="hidden" name="action_at" value="{{ $activity->action_at->format('Y-m-d\TH:i') }}">
-                    <input type="hidden" name="user_id" value="{{ $activity->user_id }}">
+                    <input type="hidden" name="user_id" value="{{ $isUserScreen ? auth()->id() : $activity->user_id }}">
                     <div class="activity-item__summary">
                         <div class="activity-summary-field activity-summary-field--readonly">
                             <span>日時</span>
