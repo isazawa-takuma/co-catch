@@ -19,12 +19,12 @@ class DatabaseSeeder extends Seeder
     public function run()
     {
         $admin = User::updateOrCreate(
-            ['email' => 'admin@example.local'],
+            ['email' => 'igarashi.m@illuvia-inc.com'],
             [
-                'name' => '管理者',
-                'last_name' => '管理',
-                'first_name' => '者',
-                'password' => Hash::make('password'),
+                'name' => '五十嵐 光範',
+                'last_name' => '五十嵐',
+                'first_name' => '光範',
+                'password' => Hash::make('tortoise@14970'),
                 'role' => 'admin',
                 'is_active' => true,
                 'must_change_password' => false,

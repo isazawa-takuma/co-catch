@@ -10,9 +10,11 @@ use Illuminate\Http\Request;
 
 class CustomerQueryService
 {
-    public function paginate(Request $request)
+    public function paginate(Request $request, ?int $ownerId = null)
     {
         $query = Customer::query()->with('owner');
+
+        $this->applyOwnerScope($query, $ownerId);
 
         $this->applyFilters($query, $request);
 
@@ -33,19 +35,21 @@ class CustomerQueryService
         return Customer::query()->select('region')->distinct()->orderBy('region')->pluck('region');
     }
 
-    public function previousCustomer(Customer $customer, Request $request): ?Customer
+    public function previousCustomer(Customer $customer, Request $request, ?int $ownerId = null): ?Customer
     {
-        return $this->adjacentCustomer($customer, $request, -1);
+        return $this->adjacentCustomer($customer, $request, -1, $ownerId);
     }
 
-    public function nextCustomer(Customer $customer, Request $request): ?Customer
+    public function nextCustomer(Customer $customer, Request $request, ?int $ownerId = null): ?Customer
     {
-        return $this->adjacentCustomer($customer, $request, 1);
+        return $this->adjacentCustomer($customer, $request, 1, $ownerId);
     }
 
-    private function adjacentCustomer(Customer $customer, Request $request, int $offset): ?Customer
+    private function adjacentCustomer(Customer $customer, Request $request, int $offset, ?int $ownerId = null): ?Customer
     {
         $query = Customer::query()->select('id');
+
+        $this->applyOwnerScope($query, $ownerId);
 
         $this->applyFilters($query, $request);
 
@@ -66,6 +70,13 @@ class CustomerQueryService
         }
 
         return Customer::find($adjacentId);
+    }
+
+    private function applyOwnerScope(Builder $query, ?int $ownerId): void
+    {
+        if ($ownerId !== null) {
+            $query->where('owner_id', $ownerId);
+        }
     }
 
     private function applyFilters(Builder $query, Request $request): void

@@ -423,8 +423,9 @@ class CustomerListTest extends TestCase
 
     public function test_user_customer_list_hides_admin_only_actions(): void
     {
-        $this->actingAs($this->salesUser());
-        Customer::create($this->customerData());
+        $user = $this->salesUser();
+        $this->actingAs($user);
+        $customer = Customer::create($this->customerData(['owner_id' => $user->id]));
 
         $response = $this->get('/opnavi/user/customers');
 
@@ -433,29 +434,54 @@ class CustomerListTest extends TestCase
         $response->assertDontSee('CSVインポート');
         $response->assertDontSee('一括担当者設定');
         $response->assertDontSee('営業ダッシュボード');
-        $response->assertSee(route('user.customers.show', ['customer' => 1]), false);
+        $response->assertSee(route('user.customers.show', $customer), false);
     }
 
-    public function test_user_customer_brand_link_keeps_user_service_flow(): void
+    public function test_user_customer_list_shows_only_owned_customers(): void
+    {
+        $user = $this->salesUser();
+        $otherUser = $this->salesUser();
+        $this->actingAs($user);
+
+        Customer::create($this->customerData([
+            'business_name' => '自分の担当顧客',
+            'owner_id' => $user->id,
+        ]));
+        Customer::create($this->customerData([
+            'business_name' => '他人の担当顧客',
+            'owner_id' => $otherUser->id,
+            'address' => '埼玉県さいたま市別住所1-2-3',
+        ]));
+        Customer::create($this->customerData([
+            'business_name' => '未担当顧客',
+            'owner_id' => null,
+            'address' => '埼玉県さいたま市未担当1-2-3',
+        ]));
+
+        $response = $this->get('/opnavi/user/customers');
+
+        $response->assertOk();
+        $response->assertSee('自分の担当顧客');
+        $response->assertDontSee('他人の担当顧客');
+        $response->assertDontSee('未担当顧客');
+    }
+
+    public function test_user_customer_brand_is_not_clickable(): void
     {
         $this->actingAs($this->salesUser());
 
         $listResponse = $this->get('/opnavi/user/customers');
 
         $listResponse->assertOk();
-        $listResponse->assertSee('href="'.route('user.home').'"', false);
-
-        $homeResponse = $this->get('/opnavi/user');
-
-        $homeResponse->assertOk();
-        $homeResponse->assertSee('href="'.route('user.customers.index').'"', false);
-        $homeResponse->assertDontSee('href="'.route('customers.index').'"', false);
+        $listResponse->assertSee('<span class="brand">コキャッチ</span>', false);
+        $listResponse->assertDontSee('href="'.route('user.home').'"', false);
     }
 
     public function test_user_customer_detail_hides_basic_edit_and_delete_actions(): void
     {
-        $this->actingAs($this->salesUser());
-        $customer = Customer::create($this->customerData());
+        $user = $this->salesUser();
+        $this->actingAs($user);
+        $customer = Customer::create($this->customerData(['owner_id' => $user->id]));
 
         $response = $this->get('/opnavi/user/customers/'.$customer->id);
 
@@ -471,8 +497,8 @@ class CustomerListTest extends TestCase
 
     public function test_user_customer_detail_updates_only_allowed_fields(): void
     {
-        $this->actingAs($this->salesUser());
-        $owner = User::factory()->create(['name' => '砂澤', 'is_active' => true]);
+        $owner = $this->salesUser();
+        $this->actingAs($owner);
         $customer = Customer::create($this->customerData([
             'business_name' => '変更前事業者',
             'owner_id' => $owner->id,
@@ -499,6 +525,62 @@ class CustomerListTest extends TestCase
         $this->assertSame('09099998888', $customer->contact_phone);
         $this->assertSame('2026-07-31', $customer->next_action_at->format('Y-m-d'));
         $this->assertSame('ユーザー画面で更新', $customer->sales_memo);
+    }
+
+    public function test_user_customer_detail_rejects_unowned_customer(): void
+    {
+        $user = $this->salesUser();
+        $otherUser = $this->salesUser();
+        $this->actingAs($user);
+        $customer = Customer::create($this->customerData(['owner_id' => $otherUser->id]));
+
+        $response = $this->get('/opnavi/user/customers/'.$customer->id);
+
+        $response->assertRedirect('/opnavi/user/customers');
+        $response->assertSessionHas('error', '担当外の顧客にはアクセスできません。');
+    }
+
+    public function test_user_customer_update_rejects_unowned_customer(): void
+    {
+        $user = $this->salesUser();
+        $otherUser = $this->salesUser();
+        $this->actingAs($user);
+        $customer = Customer::create($this->customerData([
+            'owner_id' => $otherUser->id,
+            'sales_memo' => '変更前メモ',
+        ]));
+
+        $response = $this->patch('/opnavi/user/customers/'.$customer->id, [
+            'sales_memo' => '変更されてはいけない',
+        ]);
+
+        $response->assertRedirect('/opnavi/user/customers');
+        $response->assertSessionHas('error', '担当外の顧客にはアクセスできません。');
+
+        $customer->refresh();
+        $this->assertSame('変更前メモ', $customer->sales_memo);
+    }
+
+    public function test_user_customer_activity_registration_rejects_unowned_customer(): void
+    {
+        $user = $this->salesUser();
+        $otherUser = $this->salesUser();
+        $this->actingAs($user);
+        $customer = Customer::create($this->customerData(['owner_id' => $otherUser->id]));
+
+        $response = $this->post('/opnavi/user/customers/'.$customer->id.'/activities', [
+            'action_at' => '2026-07-20 10:30:00',
+            'user_id' => $user->id,
+            'status' => '商談中',
+            'memo' => '登録されてはいけない履歴',
+        ]);
+
+        $response->assertRedirect('/opnavi/user/customers');
+        $response->assertSessionHas('error', '担当外の顧客にはアクセスできません。');
+        $this->assertDatabaseMissing('opnavi_activities', [
+            'customer_id' => $customer->id,
+            'memo' => '登録されてはいけない履歴',
+        ]);
     }
 
     private function customerData(array $overrides = []): array

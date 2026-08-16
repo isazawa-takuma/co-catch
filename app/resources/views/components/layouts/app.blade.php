@@ -13,13 +13,16 @@
         $isUserScreen = request()->routeIs('user.*') || in_array(auth()->user()?->role, ['appointment', 'sales'], true);
         $showsSidebar = request()->is('opnavi*') && ! request()->routeIs('admin.login', 'user.login', 'initial-setup.*');
         $customerIndexRoute = $isUserScreen ? 'user.customers.index' : 'customers.index';
-        $homeRoute = $isUserScreen ? 'user.home' : 'home';
     @endphp
     <div class="app-shell {{ $showsSidebar ? 'has-sidebar' : '' }}" data-shell>
         @if ($showsSidebar)
             <aside class="sidebar" data-sidebar>
                 <div class="sidebar__head">
-                    <a class="brand" href="{{ route($homeRoute) }}">コキャッチ</a>
+                    @if ($isUserScreen)
+                        <span class="brand">コキャッチ</span>
+                    @else
+                        <a class="brand" href="{{ route('home') }}">コキャッチ</a>
+                    @endif
                     <button class="icon-button" type="button" data-sidebar-toggle title="サイドバーを開閉">≡</button>
                 </div>
                 <nav class="sidebar__nav">
