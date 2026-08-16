@@ -32,6 +32,20 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
+        User::updateOrCreate(
+            ['email' => 'user@example.local'],
+            [
+                'name' => '田中 太郎',
+                'last_name' => '田中',
+                'first_name' => '太郎',
+                'password' => Hash::make('password'),
+                'role' => 'sales',
+                'is_active' => true,
+                'must_change_password' => false,
+                'initial_password_expires_at' => null,
+            ]
+        );
+
         if (Customer::count() === 0) {
             $customer = Customer::create([
                 'registered_at' => now()->subDays(2)->toDateString(),
