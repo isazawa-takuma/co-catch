@@ -22,6 +22,7 @@
                             <th>権限</th>
                             <th>状態</th>
                             <th>登録日</th>
+                            <th>操作</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -32,6 +33,12 @@
                                 <td>{{ $user->role }}</td>
                                 <td>{{ $user->is_active ? '有効' : '停止中' }}</td>
                                 <td>{{ optional($user->created_at)->format('Y/m/d') ?? '-' }}</td>
+                                <td>
+                                    <form method="post" action="{{ route('admin.user-management.reissue', $user) }}" data-confirm-submit="{{ $user->email }} の初期パスワードを再発行しますか？">
+                                        @csrf
+                                        <button class="button small" type="submit">再発行</button>
+                                    </form>
+                                </td>
                             </tr>
                         @endforeach
                     </tbody>

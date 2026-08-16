@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Throwable;
 
@@ -57,6 +58,35 @@ class UserManagementController extends Controller
         return redirect()
             ->route('admin.user-management.index')
             ->with('status', 'ユーザーを追加し、招待メールを送信しました。');
+    }
+
+    public function reissue(User $user)
+    {
+        $initialPassword = Str::random(12);
+
+        try {
+            DB::transaction(function () use ($user, $initialPassword) {
+                $user->forceFill([
+                    'password' => Hash::make($initialPassword),
+                    'must_change_password' => true,
+                    'initial_password_expires_at' => now()->addWeek(),
+                ])->save();
+
+                Mail::to($user->email)->send(new UserInvitationMail(
+                    $user,
+                    $initialPassword,
+                    $this->loginUrlForRole($user->role),
+                ));
+            });
+        } catch (Throwable) {
+            return redirect()
+                ->route('admin.user-management.index')
+                ->with('error', '初期パスワードの再発行に失敗しました。メール設定を確認してから再度お試しください。');
+        }
+
+        return redirect()
+            ->route('admin.user-management.index')
+            ->with('status', $user->email.' の初期パスワードを再発行しました。');
     }
 
     private function loginUrlForRole(string $role): string

@@ -74,6 +74,9 @@ class UserManagementTest extends TestCase
         $response->assertSee('user@example.com');
         $response->assertSee('有効');
         $response->assertSee('停止中');
+        $response->assertSee('再発行');
+        $response->assertSee(route('admin.user-management.reissue', User::where('email', 'admin@example.com')->firstOrFail()), false);
+        $response->assertSee('data-confirm-submit="admin@example.com の初期パスワードを再発行しますか？"', false);
     }
 
     public function test_user_invitation_creates_user_and_sends_mail(): void
@@ -145,6 +148,63 @@ class UserManagementTest extends TestCase
         $response->assertSessionHas('error', '招待メールの送信に失敗しました。メール設定を確認してから再度お試しください。');
         $response->assertSessionHas('open_user_invite', true);
         $this->assertDatabaseMissing('users', ['email' => 'failed-user@illuvia-inc.com']);
+    }
+
+    public function test_initial_password_can_be_reissued_and_sent_by_mail(): void
+    {
+        Mail::fake();
+        $user = User::factory()->create([
+            'email' => 'reissue-user@illuvia-inc.com',
+            'role' => 'sales',
+            'password' => Hash::make('Oldpass123'),
+            'must_change_password' => false,
+            'initial_password_expires_at' => null,
+        ]);
+
+        $response = $this->actingAs($this->adminUser())->post(route('admin.user-management.reissue', $user));
+
+        $response->assertRedirect('/opnavi/admin/user_management');
+        $response->assertSessionHas('status', 'reissue-user@illuvia-inc.com の初期パスワードを再発行しました。');
+
+        $user->refresh();
+        $this->assertTrue($user->must_change_password);
+        $this->assertNotNull($user->initial_password_expires_at);
+        $this->assertTrue($user->initial_password_expires_at->between(now()->addDays(6)->addHours(23), now()->addDays(7)->addMinute()));
+
+        Mail::assertSent(UserInvitationMail::class, function (UserInvitationMail $mail) use ($user) {
+            return $mail->hasTo('reissue-user@illuvia-inc.com')
+                && $mail->user->is($user)
+                && strlen($mail->initialPassword) === 12
+                && Hash::check($mail->initialPassword, $user->password)
+                && $mail->loginUrl === url('/opnavi/user/login');
+        });
+    }
+
+    public function test_initial_password_reissue_rolls_back_when_mail_sending_fails(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'reissue-failed@illuvia-inc.com',
+            'role' => 'admin',
+            'password' => Hash::make('Oldpass123'),
+            'must_change_password' => false,
+            'initial_password_expires_at' => null,
+        ]);
+        $originalPassword = $user->password;
+
+        Mail::shouldReceive('to')
+            ->once()
+            ->with('reissue-failed@illuvia-inc.com')
+            ->andThrow(new RuntimeException('mail failed'));
+
+        $response = $this->actingAs($this->adminUser())->post(route('admin.user-management.reissue', $user));
+
+        $response->assertRedirect('/opnavi/admin/user_management');
+        $response->assertSessionHas('error', '初期パスワードの再発行に失敗しました。メール設定を確認してから再度お試しください。');
+
+        $user->refresh();
+        $this->assertSame($originalPassword, $user->password);
+        $this->assertFalse($user->must_change_password);
+        $this->assertNull($user->initial_password_expires_at);
     }
 
     private function customerData(array $overrides = []): array

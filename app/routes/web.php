@@ -57,6 +57,7 @@ Route::middleware(['auth', 'initial.setup', 'opnavi.role:admin'])->group(functio
     Route::get('/opnavi/admin/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/opnavi/admin/user_management', [UserManagementController::class, 'index'])->name('admin.user-management.index');
     Route::post('/opnavi/admin/user_management', [UserManagementController::class, 'store'])->name('admin.user-management.store');
+    Route::post('/opnavi/admin/user_management/{user}/reissue', [UserManagementController::class, 'reissue'])->name('admin.user-management.reissue');
     Route::get('/opnavi/admin/customers', [CustomerController::class, 'index'])->name('customers.index');
     Route::post('/opnavi/admin/customers/import', [CustomerController::class, 'import'])->name('customers.import');
     Route::patch('/opnavi/admin/customers/bulk-owner', [CustomerController::class, 'bulkUpdateOwner'])->name('customers.bulk-owner');
