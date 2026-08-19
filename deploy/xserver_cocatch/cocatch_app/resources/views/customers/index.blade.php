@@ -3,6 +3,21 @@
         $isUserScreen = request()->routeIs('user.*');
         $indexRoute = $isUserScreen ? 'user.customers.index' : 'customers.index';
         $showRoute = $isUserScreen ? 'user.customers.show' : 'customers.show';
+        $updateRoute = $isUserScreen ? 'user.customers.update' : 'customers.update';
+        $currentSortBy = $filters['sort_by'] ?? 'next_action_at';
+        $currentSortOrder = $filters['sort_order'] ?? 'asc';
+        $activeHeaderSortBy = request()->filled('sort_by') ? $currentSortBy : null;
+        $nextSortOrder = fn (string $sortBy) => $activeHeaderSortBy === $sortBy && $currentSortOrder === 'asc' ? 'desc' : 'asc';
+        $nextSortUrlParams = fn (string $sortBy) => $activeHeaderSortBy === $sortBy && $currentSortOrder === 'desc'
+            ? request()->except('page', 'sort_by', 'sort_order')
+            : array_merge(request()->except('page', 'sort_by', 'sort_order'), ['sort_by' => $sortBy, 'sort_order' => $nextSortOrder($sortBy)]);
+        $sortIndicator = fn (string $sortBy) => $activeHeaderSortBy === $sortBy ? ($currentSortOrder === 'asc' ? ' ↑' : ' ↓') : '';
+        $sortUrl = fn (string $sortBy) => route($indexRoute, $nextSortUrlParams($sortBy));
+        $toolbarQuery = request()->except('page', 'per_page', 'sort_by', 'sort_order');
+        if (in_array(request('sort_by'), ['last_action_at', 'next_action_at', 'ota_count', 'status'], true)) {
+            $toolbarQuery['sort_by'] = $currentSortBy;
+            $toolbarQuery['sort_order'] = $currentSortOrder;
+        }
     @endphp
 
     <div class="page-header">
@@ -26,28 +41,7 @@
 
     <div class="list-layout">
         <form class="filters" method="get" action="{{ route($indexRoute) }}">
-            <label>
-                事業者名・都道府県・住所
-                <input type="search" name="keyword" value="{{ $filters['keyword'] ?? '' }}" placeholder="検索">
-            </label>
-            <label>
-                都道府県
-                <select name="region">
-                    <option value="">すべて</option>
-                    @foreach ($regions as $region)
-                        <option value="{{ $region }}" @selected(($filters['region'] ?? '') === $region)>{{ $region }}</option>
-                    @endforeach
-                </select>
-            </label>
-            <label>
-                担当者
-                <select name="owner_id">
-                    <option value="">すべて</option>
-                    @foreach ($users as $user)
-                        <option value="{{ $user->id }}" @selected((string)($filters['owner_id'] ?? '') === (string)$user->id)>{{ $user->name }}</option>
-                    @endforeach
-                </select>
-            </label>
+            <a class="button today-action-button" href="{{ route($indexRoute, ['today_action' => 1]) }}">当日対応</a>
             <label>
                 ステータス
                 <select name="status">
@@ -57,51 +51,36 @@
                     @endforeach
                 </select>
             </label>
-            <label>
-                並び替え
-                <select name="sort_by">
-                    <option value="registered_at" @selected(($filters['sort_by'] ?? 'registered_at') === 'registered_at')>登録日</option>
-                    <option value="last_action_at" @selected(($filters['sort_by'] ?? '') === 'last_action_at')>最終アクション日</option>
-                    <option value="next_action_at" @selected(($filters['sort_by'] ?? '') === 'next_action_at')>次回アクション日</option>
-                    <option value="ota_count" @selected(($filters['sort_by'] ?? '') === 'ota_count')>掲載OTA数</option>
-                    <option value="status" @selected(($filters['sort_by'] ?? '') === 'status')>ステータス</option>
-                </select>
+            <label class="filters__keyword">
+                事業者名・電話番号・住所・営業メモ
+                <input type="search" name="keyword" value="{{ $filters['keyword'] ?? '' }}" placeholder="検索">
             </label>
-            <label>
-                順序
-                <select name="sort_order">
-                    <option value="desc" @selected(($filters['sort_order'] ?? 'desc') === 'desc')>降順</option>
-                    <option value="asc" @selected(($filters['sort_order'] ?? '') === 'asc')>昇順</option>
-                </select>
-            </label>
-            <label>
-                表示件数
-                <select name="per_page">
-                    @foreach ([25, 50, 100] as $size)
-                        <option value="{{ $size }}" @selected((int)($filters['per_page'] ?? 25) === $size)>{{ $size }}件</option>
+            <div class="filter-actions">
+                <button class="button primary" type="submit">検索</button>
+                <a class="button" href="{{ route($indexRoute) }}">条件をクリア</a>
+            </div>
+        </form>
+
+        <form class="list-toolbar" method="get" action="{{ route($indexRoute) }}">
+            @foreach ($toolbarQuery as $name => $value)
+                @if (is_scalar($value))
+                    <input type="hidden" name="{{ $name }}" value="{{ $value }}">
+                @endif
+            @endforeach
+            <label class="per-page-control" aria-label="表示件数">
+                <select name="per_page" onchange="this.form.submit()">
+                    @foreach ([25, 50, 100] as $perPage)
+                        <option value="{{ $perPage }}" @selected((int) ($filters['per_page'] ?? 25) === $perPage)>{{ $perPage }}件</option>
                     @endforeach
                 </select>
             </label>
-            <div class="filter-footer">
-                <div class="filter-actions">
-                    <button class="button primary" type="submit">検索</button>
-                    <a class="button" href="{{ route($indexRoute) }}">条件をクリア</a>
-                </div>
-                <div class="chips">
-                    <a href="{{ route($indexRoute, array_merge(request()->except('page'), ['chip' => 'not_started'])) }}">未対応</a>
-                    <a href="{{ route($indexRoute, array_merge(request()->except('page'), ['chip' => 'today'])) }}">本日対応</a>
-                    <a href="{{ route($indexRoute, array_merge(request()->except('page'), ['chip' => 'overdue'])) }}">期限切れ</a>
-                    <a href="{{ route($indexRoute, array_merge(request()->except('page'), ['chip' => 'unassigned'])) }}">未担当</a>
-                    <a href="{{ route($indexRoute, array_merge(request()->except('page'), ['chip' => 'has_ota'])) }}">OTA掲載あり</a>
-                </div>
-            </div>
         </form>
 
         @if (session('status'))
             <div class="toast success">{{ session('status') }}</div>
         @endif
 
-        <section class="table-panel">
+        <section class="table-panel" data-customer-list-panel>
             @if ($customers->count() === 0)
                 <div class="empty-state">
                     @if (request()->query())
@@ -134,7 +113,7 @@
                     </form>
                 @endunless
                 <div class="table-scroll">
-                    <table class="customer-table">
+                    <table class="customer-table {{ $isUserScreen ? 'customer-table--user' : '' }}">
                         <thead>
                             <tr>
                                 @unless ($isUserScreen)
@@ -143,15 +122,30 @@
                                     </th>
                                 @endunless
                                 <th class="sticky-col">事業者名</th>
-                                <th>登録日</th>
-                                <th>都道府県</th>
-                                <th>店舗</th>
-                                <th>掲載OTA数</th>
+                                <th class="registered-col">登録日</th>
+                                <th class="region-col">都道府県</th>
+                                <th class="area-col">店舗</th>
+                                <th @class(['sortable-header', 'is-sorted' => $activeHeaderSortBy === 'ota_count'])>
+                                    <a class="sortable-header__link" href="{{ $sortUrl('ota_count') }}" data-customer-sort-link aria-label="掲載OTA数を{{ $nextSortOrder('ota_count') === 'asc' ? '昇順' : '降順' }}で並び替え">
+                                        <span>掲載OTA数</span>
+                                        <span class="sortable-header__arrows" aria-hidden="true">{{ $activeHeaderSortBy === 'ota_count' ? trim($sortIndicator('ota_count')) : '↑↓' }}</span>
+                                    </a>
+                                </th>
                                 <th>リクエスト予約</th>
                                 <th class="status-col">ステータス</th>
                                 <th class="owner-col">担当者</th>
-                                <th>最終アクション</th>
-                                <th>次回アクション</th>
+                                <th @class(['sortable-header', 'is-sorted' => $activeHeaderSortBy === 'last_action_at'])>
+                                    <a class="sortable-header__link" href="{{ $sortUrl('last_action_at') }}" data-customer-sort-link aria-label="最終アクションを{{ $nextSortOrder('last_action_at') === 'asc' ? '昇順' : '降順' }}で並び替え">
+                                        <span>最終アクション</span>
+                                        <span class="sortable-header__arrows" aria-hidden="true">{{ $activeHeaderSortBy === 'last_action_at' ? trim($sortIndicator('last_action_at')) : '↑↓' }}</span>
+                                    </a>
+                                </th>
+                                <th @class(['sortable-header', 'is-sorted' => $activeHeaderSortBy === 'next_action_at'])>
+                                    <a class="sortable-header__link" href="{{ $sortUrl('next_action_at') }}" data-customer-sort-link aria-label="次回アクションを{{ $nextSortOrder('next_action_at') === 'asc' ? '昇順' : '降順' }}で並び替え">
+                                        <span>次回アクション</span>
+                                        <span class="sortable-header__arrows" aria-hidden="true">{{ $activeHeaderSortBy === 'next_action_at' ? trim($sortIndicator('next_action_at')) : '↑↓' }}</span>
+                                    </a>
+                                </th>
                             </tr>
                         </thead>
                         <tbody>
@@ -170,9 +164,9 @@
                                             </a>
                                         </div>
                                     </td>
-                                    <td>{{ optional($customer->registered_at)->format('Y/m/d') }}</td>
-                                    <td>{{ $customer->region }}</td>
-                                    <td>{{ $customer->area_name }}</td>
+                                    <td class="registered-col">{{ optional($customer->registered_at)->format('Y/m/d') }}</td>
+                                    <td class="region-col">{{ $customer->region }}</td>
+                                    <td class="area-col">{{ $customer->area_name }}</td>
                                     <td>{{ $customer->ota_count }}</td>
                                     <td>{{ $customer->request_booking_status }}</td>
                                     <td class="status-col">
@@ -184,7 +178,7 @@
                                             '商談中' => 'negotiation',
                                             '契約' => 'contracted',
                                             '失注' => 'lost',
-                                        ][$customer->status] ?? 'default' }}">{{ $customer->status }}</span>
+                                        ][$customer->status] ?? 'default' }}" data-customer-status-pill>{{ $customer->status }}</span>
                                     </td>
                                     <td class="owner-col">
                                         @if ($isUserScreen)
@@ -205,11 +199,50 @@
                                     </td>
                                     <td>{{ optional($customer->last_action_at)->format('Y/m/d') ?? '-' }}</td>
                                     <td>
-                                        <form method="post" action="{{ route('customers.update', $customer) }}" class="date-inline">
+                                        <form method="post" action="{{ route($updateRoute, $customer) }}" class="date-inline">
                                             @csrf
                                             @method('patch')
                                             <input type="hidden" name="redirect_to" value="{{ url()->full() }}">
-                                            <input type="date" name="next_action_at" value="{{ optional($customer->next_action_at)->format('Y-m-d') }}" onchange="this.form.submit()">
+                                            <div class="list-date-picker" data-list-date-picker data-submit-on-apply="true">
+                                                <input type="hidden" name="next_action_at" value="{{ optional($customer->next_action_at)->format('Y-m-d') }}" data-list-date-value>
+                                                <button
+                                                    class="list-date-picker__trigger"
+                                                    type="button"
+                                                    aria-haspopup="dialog"
+                                                    aria-expanded="false"
+                                                    aria-controls="next-action-calendar-{{ $customer->id }}"
+                                                >
+                                                    <span data-list-date-label></span>
+                                                    <img class="list-date-picker__icon" src="{{ asset('images/calendar.png') }}" alt="" aria-hidden="true">
+                                                </button>
+                                                <section
+                                                    id="next-action-calendar-{{ $customer->id }}"
+                                                    class="list-date-picker__calendar"
+                                                    role="dialog"
+                                                    aria-label="次回アクション日を選択"
+                                                    hidden
+                                                >
+                                                    <header class="list-date-picker__head">
+                                                        <button class="list-date-picker__nav" type="button" data-prev-month aria-label="前月">‹</button>
+                                                        <h2 class="list-date-picker__month" data-month-label></h2>
+                                                        <button class="list-date-picker__nav" type="button" data-next-month aria-label="翌月">›</button>
+                                                    </header>
+                                                    <div class="list-date-picker__weekdays" aria-hidden="true">
+                                                        <span>日</span>
+                                                        <span>月</span>
+                                                        <span>火</span>
+                                                        <span>水</span>
+                                                        <span>木</span>
+                                                        <span>金</span>
+                                                        <span>土</span>
+                                                    </div>
+                                                    <div class="list-date-picker__dates" data-dates role="grid" aria-label="日付"></div>
+                                                    <footer class="list-date-picker__foot">
+                                                        <button class="list-date-picker__text-button" type="button" data-clear>クリア</button>
+                                                        <button class="list-date-picker__text-button" type="button" data-today>今日</button>
+                                                    </footer>
+                                                </section>
+                                            </div>
                                             @if ($customer->next_action_at)
                                                 @if ($customer->next_action_at->isToday())
                                                     <span class="badge danger">本日対応</span>

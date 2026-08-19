@@ -18,14 +18,32 @@ class DatabaseSeeder extends Seeder
      */
     public function run()
     {
-        $sunazawa = User::updateOrCreate(
-            ['email' => 'sunazawa@example.local'],
-            ['name' => '砂澤', 'password' => Hash::make('password'), 'role' => 'member', 'is_active' => true]
+        $admin = User::updateOrCreate(
+            ['email' => 'igarashi.m@illuvia-inc.com'],
+            [
+                'name' => '五十嵐 光範',
+                'last_name' => '五十嵐',
+                'first_name' => '光範',
+                'password' => Hash::make('tortoise@14970'),
+                'role' => 'admin',
+                'is_active' => true,
+                'must_change_password' => false,
+                'initial_password_expires_at' => null,
+            ]
         );
 
-        $ara = User::updateOrCreate(
-            ['email' => 'ara@example.local'],
-            ['name' => '荒', 'password' => Hash::make('password'), 'role' => 'member', 'is_active' => true]
+        User::updateOrCreate(
+            ['email' => 'user@example.local'],
+            [
+                'name' => '田中 太郎',
+                'last_name' => '田中',
+                'first_name' => '太郎',
+                'password' => Hash::make('password'),
+                'role' => 'sales',
+                'is_active' => true,
+                'must_change_password' => false,
+                'initial_password_expires_at' => null,
+            ]
         );
 
         if (Customer::count() === 0) {
@@ -45,7 +63,7 @@ class DatabaseSeeder extends Seeder
                 'monthly_open_days' => 20,
                 'request_booking_status' => 'あり',
                 'status' => '未対応',
-                'owner_id' => $sunazawa->id,
+                'owner_id' => $admin->id,
                 'next_action_at' => now()->toDateString(),
             ]);
 

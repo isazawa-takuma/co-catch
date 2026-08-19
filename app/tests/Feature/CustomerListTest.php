@@ -82,6 +82,78 @@ class CustomerListTest extends TestCase
         }
     }
 
+    public function test_phone_search_supports_exact_prefix_and_middle_matches(): void
+    {
+        Customer::create($this->customerData([
+            'business_name' => '本社電話検索対象',
+            'head_office_phone' => '03-1234-5678',
+        ]));
+        Customer::create($this->customerData([
+            'business_name' => '公開電話検索対象',
+            'address' => '埼玉県川口市1-2-3',
+            'public_phone' => '050 7109 1331',
+        ]));
+        Customer::create($this->customerData([
+            'business_name' => '担当電話検索対象',
+            'address' => '埼玉県川口市4-5-6',
+            'contact_phone' => '090-2222-3333',
+        ]));
+
+        $cases = [
+            '0312345678' => '本社電話検索対象',
+            '03-1234' => '本社電話検索対象',
+            '123456' => '本社電話検索対象',
+            '05071091331' => '公開電話検索対象',
+            '050-7109' => '公開電話検索対象',
+            '71091331' => '公開電話検索対象',
+            '09022223333' => '担当電話検索対象',
+            '090 2222' => '担当電話検索対象',
+            '222233' => '担当電話検索対象',
+        ];
+
+        foreach ($cases as $keyword => $expectedBusinessName) {
+            $response = $this->get('/opnavi/admin/customers?keyword='.urlencode($keyword));
+
+            $response->assertOk();
+            $response->assertSee($expectedBusinessName);
+        }
+    }
+
+    public function test_phone_search_index_is_synced_when_customer_phone_changes(): void
+    {
+        $customer = Customer::create($this->customerData([
+            'business_name' => '電話更新検索対象',
+            'public_phone' => '050-7109-1331',
+        ]));
+
+        $this->assertDatabaseHas('opnavi_customers', [
+            'id' => $customer->id,
+            'public_phone_normalized' => '05071091331',
+        ]);
+        $this->assertDatabaseHas('opnavi_customer_phone_indexes', [
+            'customer_id' => $customer->id,
+            'phone_column' => 'public_phone',
+            'phone_token' => '7109',
+        ]);
+
+        $customer->update(['public_phone' => '03-1234-5678']);
+
+        $this->assertDatabaseHas('opnavi_customers', [
+            'id' => $customer->id,
+            'public_phone_normalized' => '0312345678',
+        ]);
+        $this->assertDatabaseMissing('opnavi_customer_phone_indexes', [
+            'customer_id' => $customer->id,
+            'phone_column' => 'public_phone',
+            'phone_token' => '7109',
+        ]);
+        $this->assertDatabaseHas('opnavi_customer_phone_indexes', [
+            'customer_id' => $customer->id,
+            'phone_column' => 'public_phone',
+            'phone_token' => '123456',
+        ]);
+    }
+
     public function test_keyword_search_uses_and_for_space_separated_terms(): void
     {
         Customer::create($this->customerData([
@@ -175,6 +247,27 @@ class CustomerListTest extends TestCase
         $response->assertSee('aria-label="表示件数"', false);
     }
 
+    public function test_customer_search_form_shows_added_statuses(): void
+    {
+        Customer::create($this->customerData());
+
+        $response = $this->get('/opnavi/admin/customers');
+
+        $response->assertOk();
+        foreach ([
+            '見込み（アポイント時）',
+            '見込み（アポイント後）',
+            '追客',
+            'メール',
+            '受付ブロック',
+            '担当不在',
+            '現アナ',
+            'NG',
+        ] as $status) {
+            $response->assertSee('<option value="'.$status.'"', false);
+        }
+    }
+
     public function test_customer_table_headers_show_sort_links(): void
     {
         $owner = User::factory()->create(['name' => '砂澤', 'is_active' => true]);
@@ -208,6 +301,22 @@ class CustomerListTest extends TestCase
         $response->assertOk();
         $response->assertSee('<span class="sortable-header__arrows" aria-hidden="true">↓</span>', false);
         $response->assertSee('href="http://localhost:8080/opnavi/admin/customers?keyword=%E9%99%B6%E8%8A%B8"', false);
+    }
+
+    public function test_customer_list_next_action_is_readonly_date_text(): void
+    {
+        Customer::create($this->customerData([
+            'business_name' => '次回アクション表示対象',
+            'next_action_at' => '2026-07-23',
+        ]));
+
+        $response = $this->get('/opnavi/admin/customers');
+
+        $response->assertOk();
+        $response->assertSee('2026/07/23');
+        $response->assertDontSee('name="next_action_at"', false);
+        $response->assertDontSee('data-submit-on-apply="true"', false);
+        $response->assertDontSee('next-action-calendar-', false);
     }
 
     public function test_inline_owner_update_returns_to_customer_list(): void
@@ -256,6 +365,17 @@ class CustomerListTest extends TestCase
         $response->assertSee('data-customer-row="'.$customer->id.'"', false);
         $response->assertSee('data-customer-status-pill', false);
         $response->assertSee('status-pill--negotiation', false);
+    }
+
+    public function test_customer_list_uses_status_class_for_added_status(): void
+    {
+        Customer::create($this->customerData(['status' => '見込み（アポイント後）']));
+
+        $response = $this->get('/opnavi/admin/customers');
+
+        $response->assertOk();
+        $response->assertSee('見込み（アポイント後）');
+        $response->assertSee('status-pill--prospect-after-appointment', false);
     }
 
     public function test_customer_detail_marks_current_status_for_cross_tab_sync(): void
@@ -323,7 +443,9 @@ class CustomerListTest extends TestCase
 
         $response->assertOk();
         $response->assertSeeInOrder(['今日対応顧客', '明日対応顧客', '未設定顧客']);
-        $response->assertSee('次回アクション日');
+        $response->assertSee('次回アクション');
+        $response->assertSee('2026/07/20');
+        $response->assertSee('2026/07/21');
         $response->assertDontSee('>登録日</option>', false);
     }
 

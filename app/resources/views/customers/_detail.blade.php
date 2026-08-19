@@ -101,15 +101,7 @@
             <div class="readonly-field-group">
                 <span class="detail-field-label">ステータス</span>
                 <div class="readonly-field">
-                    <strong class="status-pill status-pill--{{ [
-                        '未対応' => 'not-started',
-                        '連絡済み' => 'contacted',
-                        'やり取り中' => 'in-progress',
-                        'アポイント' => 'appointment',
-                        '商談中' => 'negotiation',
-                        '契約' => 'contracted',
-                        '失注' => 'lost',
-                    ][$customer->status] ?? 'default' }}" data-current-customer-status data-customer-id="{{ $customer->id }}">{{ $customer->status }}</strong>
+                    <strong class="status-pill status-pill--{{ \App\Models\Customer::statusClass($customer->status) }}" data-current-customer-status data-customer-id="{{ $customer->id }}">{{ $customer->status }}</strong>
                     <small>最新の架電・対応履歴から反映</small>
                 </div>
             </div>
@@ -384,15 +376,7 @@
                             </span>
                             <span class="activity-summary-value">
                                 <span>ステータス</span>
-                                <strong class="status-pill status-pill--{{ [
-                                    '未対応' => 'not-started',
-                                    '連絡済み' => 'contacted',
-                                    'やり取り中' => 'in-progress',
-                                    'アポイント' => 'appointment',
-                                    '商談中' => 'negotiation',
-                                    '契約' => 'contracted',
-                                    '失注' => 'lost',
-                                ][$activity->status] ?? 'not-started' }}">{{ $activity->status }}</strong>
+                                <strong class="status-pill status-pill--{{ \App\Models\Customer::statusClass($activity->status) }}">{{ $activity->status }}</strong>
                             </span>
                         </span>
                         <span class="activity-summary-value activity-summary-value--memo">

@@ -737,6 +737,24 @@ th.sticky-col {
     color: #334155;
 }
 
+.status-pill--unavailable {
+    background: #e2e8f0;
+    border-color: #94a3b8;
+    color: #334155;
+}
+
+.status-pill--reception-block {
+    background: #ffe4e6;
+    border-color: #fda4af;
+    color: #be123c;
+}
+
+.status-pill--email {
+    background: #e0f2fe;
+    border-color: #7dd3fc;
+    color: #0369a1;
+}
+
 .status-pill--contacted {
     background: #dbeafe;
     border-color: #93c5fd;
@@ -749,10 +767,34 @@ th.sticky-col {
     color: #0e7490;
 }
 
+.status-pill--prospect-before-appointment {
+    background: #ffedd5;
+    border-color: #fdba74;
+    color: #c2410c;
+}
+
 .status-pill--appointment {
     background: #fef3c7;
     border-color: #fcd34d;
     color: #92400e;
+}
+
+.status-pill--prospect-after-appointment {
+    background: #ecfccb;
+    border-color: #bef264;
+    color: #4d7c0f;
+}
+
+.status-pill--follow-up {
+    background: #fae8ff;
+    border-color: #e879f9;
+    color: #a21caf;
+}
+
+.status-pill--current-analysis {
+    background: #e0e7ff;
+    border-color: #a5b4fc;
+    color: #4338ca;
 }
 
 .status-pill--negotiation {
@@ -765,6 +807,12 @@ th.sticky-col {
     background: #dcfce7;
     border-color: #86efac;
     color: #166534;
+}
+
+.status-pill--ng {
+    background: #f3f4f6;
+    border-color: #9ca3af;
+    color: #111827;
 }
 
 .status-pill--lost {

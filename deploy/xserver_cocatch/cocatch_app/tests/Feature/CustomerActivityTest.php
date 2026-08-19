@@ -12,6 +12,17 @@ class CustomerActivityTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->actingAs(User::factory()->create([
+            'role' => 'admin',
+            'is_active' => true,
+            'must_change_password' => false,
+        ]));
+    }
+
     public function test_activity_registration_syncs_customer_status(): void
     {
         $user = User::factory()->create(['name' => '砂澤', 'is_active' => true]);

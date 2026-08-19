@@ -21,11 +21,19 @@ let drawerIsLoading = false;
 
 const CUSTOMER_STATUS_CLASSES = {
     '未対応': 'not-started',
+    '担当不在': 'unavailable',
+    '受付ブロック': 'reception-block',
+    'メール': 'email',
     '連絡済み': 'contacted',
     'やり取り中': 'in-progress',
+    '見込み（アポイント時）': 'prospect-before-appointment',
     'アポイント': 'appointment',
+    '見込み（アポイント後）': 'prospect-after-appointment',
+    '追客': 'follow-up',
+    '現アナ': 'current-analysis',
     '商談中': 'negotiation',
     '契約': 'contracted',
+    'NG': 'ng',
     '失注': 'lost',
 };
 

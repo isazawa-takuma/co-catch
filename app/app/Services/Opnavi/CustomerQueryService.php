@@ -4,7 +4,10 @@ namespace App\Services\Opnavi;
 
 use App\Models\Customer;
 use App\Models\User;
+use App\Support\PhoneSearch;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
+use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 
@@ -47,7 +50,7 @@ class CustomerQueryService
 
     private function adjacentCustomer(Customer $customer, Request $request, int $offset, ?int $ownerId = null): ?Customer
     {
-        $query = Customer::query()->select('id');
+        $query = Customer::query()->select('opnavi_customers.id');
 
         $this->applyOwnerScope($query, $ownerId);
 
@@ -108,19 +111,28 @@ class CustomerQueryService
 
     private function applyKeywordFilter(Builder $query, string $keyword): void
     {
-        foreach ($this->keywordTerms($keyword) as $term) {
-            $query->where(function (Builder $inner) use ($term) {
-                if ($this->shouldUseFullText($term)) {
-                    $inner->whereRaw(
-                        'MATCH (business_name, address, sales_memo) AGAINST (? IN BOOLEAN MODE)',
-                        [$this->booleanPhrase($term)]
-                    );
-                } else {
-                    $this->applyTextLikeKeywordFilter($inner, $term);
-                }
+        foreach ($this->keywordTerms($keyword) as $index => $term) {
+            if ($this->shouldUseFullText($term)) {
+                $this->ensureCustomerColumnsSelected($query);
+                $alias = 'keyword_candidates_'.$index;
+                $query->joinSub($this->mysqlKeywordCandidateSubquery($term), $alias, function (JoinClause $join) use ($alias) {
+                    $join->on('opnavi_customers.id', '=', $alias.'.id');
+                });
 
+                continue;
+            }
+
+            $query->where(function (Builder $inner) use ($term) {
+                $this->applyTextLikeKeywordFilter($inner, $term);
                 $this->applyPhoneKeywordFilter($inner, $term);
             });
+        }
+    }
+
+    private function ensureCustomerColumnsSelected(Builder $query): void
+    {
+        if ($query->getQuery()->columns === null) {
+            $query->select('opnavi_customers.*');
         }
     }
 
@@ -146,33 +158,85 @@ class CustomerQueryService
             ->orWhere('sales_memo', 'like', "%{$term}%");
     }
 
+    private function mysqlKeywordCandidateSubquery(string $term): QueryBuilder
+    {
+        $subQuery = DB::query()
+            ->select('id')
+            ->from('opnavi_customers')
+            ->whereNull('deleted_at')
+            ->whereRaw(
+                'MATCH (business_name, address, sales_memo) AGAINST (? IN BOOLEAN MODE)',
+                [$this->booleanPhrase($term)]
+            );
+
+        $normalizedTerm = PhoneSearch::normalize($term);
+        if ($normalizedTerm === '') {
+            return $subQuery;
+        }
+
+        $subQuery->union($this->mysqlPhoneNormalizedCandidateSubquery($normalizedTerm));
+
+        if (strlen($normalizedTerm) >= PhoneSearch::MIN_TOKEN_LENGTH) {
+            $subQuery->union(
+                DB::query()
+                    ->selectRaw('customer_id as id')
+                    ->from('opnavi_customer_phone_indexes')
+                    ->where('phone_token', $normalizedTerm)
+            );
+        }
+
+        return $subQuery;
+    }
+
+    private function mysqlPhoneNormalizedCandidateSubquery(string $normalizedTerm): QueryBuilder
+    {
+        return DB::query()
+            ->select('id')
+            ->from('opnavi_customers')
+            ->whereNull('deleted_at')
+            ->where(function (QueryBuilder $phoneQuery) use ($normalizedTerm) {
+                foreach (['head_office_phone_normalized', 'public_phone_normalized', 'contact_phone_normalized'] as $column) {
+                    if (strlen($normalizedTerm) >= PhoneSearch::MIN_TOKEN_LENGTH) {
+                        $phoneQuery->orWhere($column, $normalizedTerm)
+                            ->orWhere($column, 'like', "{$normalizedTerm}%");
+                    } else {
+                        $phoneQuery->orWhere($column, 'like', "%{$normalizedTerm}%");
+                    }
+                }
+            });
+    }
+
     private function applyPhoneKeywordFilter(Builder $query, string $term): void
     {
-        $normalizedTerm = $this->normalizePhoneKeyword($term);
+        $normalizedTerm = PhoneSearch::normalize($term);
 
         if ($normalizedTerm === '') {
             return;
         }
 
-        foreach (['head_office_phone', 'public_phone', 'contact_phone'] as $column) {
-            $query->orWhereRaw($this->normalizedPhoneColumnExpression($column).' like ?', ["%{$normalizedTerm}%"]);
-        }
-    }
+        if (strlen($normalizedTerm) < PhoneSearch::MIN_TOKEN_LENGTH) {
+            $query->orWhere(function (Builder $phoneQuery) use ($normalizedTerm) {
+                foreach (['head_office_phone_normalized', 'public_phone_normalized', 'contact_phone_normalized'] as $column) {
+                    $phoneQuery->orWhere($column, 'like', "%{$normalizedTerm}%");
+                }
+            });
 
-    private function normalizePhoneKeyword(string $term): string
-    {
-        return preg_replace('/\D+/u', '', $term) ?? '';
-    }
-
-    private function normalizedPhoneColumnExpression(string $column): string
-    {
-        $expression = $column;
-
-        foreach (['-', ' ', '　', '(', ')'] as $character) {
-            $expression = "REPLACE({$expression}, '{$character}', '')";
+            return;
         }
 
-        return $expression;
+        $query->orWhere(function (Builder $phoneQuery) use ($normalizedTerm) {
+            foreach (['head_office_phone_normalized', 'public_phone_normalized', 'contact_phone_normalized'] as $column) {
+                $phoneQuery->orWhere($column, $normalizedTerm)
+                    ->orWhere($column, 'like', "{$normalizedTerm}%");
+            }
+
+            $phoneQuery->orWhereExists(function ($subQuery) use ($normalizedTerm) {
+                $subQuery->selectRaw('1')
+                    ->from('opnavi_customer_phone_indexes')
+                    ->whereColumn('opnavi_customer_phone_indexes.customer_id', 'opnavi_customers.id')
+                    ->where('opnavi_customer_phone_indexes.phone_token', $normalizedTerm);
+            });
+        });
     }
 
     private function applySort(Builder $query, Request $request): void
@@ -181,15 +245,15 @@ class CustomerQueryService
         $sortOrder = $this->sortOrder($request);
 
         if ($sortBy === 'next_action_at') {
-            $query->orderByRaw('next_action_at is null')
-                ->orderBy('next_action_at', $sortOrder)
-                ->orderByDesc('id');
+            $query->orderByRaw('opnavi_customers.next_action_at is null')
+                ->orderBy('opnavi_customers.next_action_at', $sortOrder)
+                ->orderByDesc('opnavi_customers.id');
 
             return;
         }
 
-        $query->orderBy($sortBy, $sortOrder)
-            ->orderByDesc('id');
+        $query->orderBy('opnavi_customers.'.$sortBy, $sortOrder)
+            ->orderByDesc('opnavi_customers.id');
     }
 
     public function sortBy(Request $request): string

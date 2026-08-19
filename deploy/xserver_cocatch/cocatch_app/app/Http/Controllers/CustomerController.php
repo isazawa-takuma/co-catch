@@ -14,6 +14,7 @@ use App\Services\Opnavi\CustomerImportService;
 use App\Services\Opnavi\CustomerQueryService;
 use App\Services\Opnavi\CustomerService;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Str;
 
 class CustomerController extends Controller
@@ -33,16 +34,21 @@ class CustomerController extends Controller
 
     public function userIndex(Request $request)
     {
-        return $this->listView($request);
+        return $this->listView($request, $request->user()->id);
     }
 
-    private function listView(Request $request)
+    private function listView(Request $request, ?int $ownerId = null)
     {
+        $filters = array_merge($request->all(), [
+            'sort_by' => $this->queryService->sortBy($request),
+            'sort_order' => $this->queryService->sortOrder($request),
+        ]);
+
         return view('customers.index', [
-            'customers' => $this->queryService->paginate($request),
+            'customers' => $this->queryService->paginate($request, $ownerId),
             'users' => $this->queryService->activeUsers(),
             'statuses' => Customer::STATUSES,
-            'filters' => $request->all(),
+            'filters' => $filters,
             'regions' => $this->queryService->regions(),
         ]);
     }
@@ -54,10 +60,14 @@ class CustomerController extends Controller
 
     public function userShow(Request $request, Customer $customer)
     {
-        return $this->detailView($request, $customer);
+        if ($response = $this->denyUserCustomerAccess($request, $customer)) {
+            return $response;
+        }
+
+        return $this->detailView($request, $customer, $request->user()->id);
     }
 
-    private function detailView(Request $request, Customer $customer)
+    private function detailView(Request $request, Customer $customer, ?int $ownerId = null)
     {
         $customer->load(['owner', 'otaLinks', 'activities.user']);
 
@@ -68,8 +78,8 @@ class CustomerController extends Controller
             'users' => $this->queryService->activeUsers(),
             'statuses' => Customer::STATUSES,
             'contactStatuses' => Activity::CONTACT_STATUSES,
-            'previousCustomer' => $this->queryService->previousCustomer($customer, $request),
-            'nextCustomer' => $this->queryService->nextCustomer($customer, $request),
+            'previousCustomer' => $this->queryService->previousCustomer($customer, $request, $ownerId),
+            'nextCustomer' => $this->queryService->nextCustomer($customer, $request, $ownerId),
         ]);
     }
 
@@ -85,6 +95,10 @@ class CustomerController extends Controller
 
     public function userUpdate(UserCustomerUpdateRequest $request, Customer $customer)
     {
+        if ($response = $this->denyUserCustomerAccess($request, $customer)) {
+            return $response;
+        }
+
         $data = $request->safe()->only([
             'contact_phone',
             'next_action_at',
@@ -117,7 +131,15 @@ class CustomerController extends Controller
 
     public function userStoreActivity(ActivitySaveRequest $request, Customer $customer)
     {
-        $this->activityService->create($customer, $request->validated());
+        if ($response = $this->denyUserCustomerAccess($request, $customer)) {
+            return $response;
+        }
+
+        $data = array_merge($request->validated(), [
+            'user_id' => $request->user()->id,
+        ]);
+
+        $this->activityService->create($customer, $data);
 
         return $this->redirectToCustomerDetail($request, $customer, 'user')
             ->with('status', '履歴を登録しました')
@@ -135,7 +157,15 @@ class CustomerController extends Controller
 
     public function userUpdateActivity(ActivitySaveRequest $request, Customer $customer, Activity $activity)
     {
-        $this->activityService->update($customer, $activity, $request->validated());
+        if ($response = $this->denyUserCustomerAccess($request, $customer)) {
+            return $response;
+        }
+
+        $data = array_merge($request->validated(), [
+            'user_id' => $request->user()->id,
+        ]);
+
+        $this->activityService->update($customer, $activity, $data);
 
         return $this->redirectToCustomerDetail($request, $customer, 'user')
             ->with('status', '履歴を更新しました')
@@ -199,5 +229,20 @@ class CustomerController extends Controller
         }
 
         return redirect()->route('customers.index');
+    }
+
+    private function denyUserCustomerAccess(Request $request, Customer $customer)
+    {
+        if ((int) $customer->owner_id === (int) $request->user()->id) {
+            return null;
+        }
+
+        $message = '担当外の顧客にはアクセスできません。';
+
+        if ($request->ajax()) {
+            return response($message, Response::HTTP_FORBIDDEN);
+        }
+
+        return redirect()->route('user.customers.index')->with('error', $message);
     }
 }

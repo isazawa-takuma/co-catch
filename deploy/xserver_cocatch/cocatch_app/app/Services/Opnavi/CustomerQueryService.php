@@ -5,19 +5,22 @@ namespace App\Services\Opnavi;
 use App\Models\Customer;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 
 class CustomerQueryService
 {
-    public function paginate(Request $request)
+    public function paginate(Request $request, ?int $ownerId = null)
     {
         $query = Customer::query()->with('owner');
 
+        $this->applyOwnerScope($query, $ownerId);
+
         $this->applyFilters($query, $request);
 
+        $this->applySort($query, $request);
+
         return $query
-            ->orderBy($this->sortBy($request), $this->sortOrder($request))
-            ->orderByDesc('id')
             ->paginate($this->perPage($request))
             ->withQueryString();
     }
@@ -32,26 +35,27 @@ class CustomerQueryService
         return Customer::query()->select('region')->distinct()->orderBy('region')->pluck('region');
     }
 
-    public function previousCustomer(Customer $customer, Request $request): ?Customer
+    public function previousCustomer(Customer $customer, Request $request, ?int $ownerId = null): ?Customer
     {
-        return $this->adjacentCustomer($customer, $request, -1);
+        return $this->adjacentCustomer($customer, $request, -1, $ownerId);
     }
 
-    public function nextCustomer(Customer $customer, Request $request): ?Customer
+    public function nextCustomer(Customer $customer, Request $request, ?int $ownerId = null): ?Customer
     {
-        return $this->adjacentCustomer($customer, $request, 1);
+        return $this->adjacentCustomer($customer, $request, 1, $ownerId);
     }
 
-    private function adjacentCustomer(Customer $customer, Request $request, int $offset): ?Customer
+    private function adjacentCustomer(Customer $customer, Request $request, int $offset, ?int $ownerId = null): ?Customer
     {
         $query = Customer::query()->select('id');
 
+        $this->applyOwnerScope($query, $ownerId);
+
         $this->applyFilters($query, $request);
 
-        $ids = $query
-            ->orderBy($this->sortBy($request), $this->sortOrder($request))
-            ->orderByDesc('id')
-            ->pluck('id')
+        $this->applySort($query, $request);
+
+        $ids = $query->pluck('id')
             ->map(fn ($id) => (int) $id)
             ->values();
 
@@ -68,17 +72,17 @@ class CustomerQueryService
         return Customer::find($adjacentId);
     }
 
+    private function applyOwnerScope(Builder $query, ?int $ownerId): void
+    {
+        if ($ownerId !== null) {
+            $query->where('owner_id', $ownerId);
+        }
+    }
+
     private function applyFilters(Builder $query, Request $request): void
     {
         if ($keyword = trim((string) $request->input('keyword'))) {
-            $query->where(function ($inner) use ($keyword) {
-                $inner->where('business_name', 'like', "%{$keyword}%")
-                    ->orWhere('region', 'like', "%{$keyword}%")
-                    ->orWhere('address', 'like', "%{$keyword}%")
-                    ->orWhere('area_name', 'like', "%{$keyword}%")
-                    ->orWhere('experience_title', 'like', "%{$keyword}%")
-                    ->orWhere('sales_memo', 'like', "%{$keyword}%");
-            });
+            $this->applyKeywordFilter($query, $keyword);
         }
 
         foreach (['region', 'status', 'owner_id'] as $field) {
@@ -87,7 +91,9 @@ class CustomerQueryService
             }
         }
 
-        if ($request->input('chip') === 'today') {
+        if ($request->boolean('today_action')) {
+            $query->whereDate('next_action_at', now()->toDateString());
+        } elseif ($request->input('chip') === 'today') {
             $query->whereDate('next_action_at', now()->toDateString());
         } elseif ($request->input('chip') === 'overdue') {
             $query->whereNotNull('next_action_at')->whereDate('next_action_at', '<', now()->toDateString());
@@ -100,17 +106,105 @@ class CustomerQueryService
         }
     }
 
-    private function sortBy(Request $request): string
+    private function applyKeywordFilter(Builder $query, string $keyword): void
     {
-        $sortBy = $request->input('sort_by', 'registered_at');
-        $allowedSorts = ['registered_at', 'last_action_at', 'next_action_at', 'ota_count', 'status'];
+        foreach ($this->keywordTerms($keyword) as $term) {
+            $query->where(function (Builder $inner) use ($term) {
+                if ($this->shouldUseFullText($term)) {
+                    $inner->whereRaw(
+                        'MATCH (business_name, address, sales_memo) AGAINST (? IN BOOLEAN MODE)',
+                        [$this->booleanPhrase($term)]
+                    );
+                } else {
+                    $this->applyTextLikeKeywordFilter($inner, $term);
+                }
 
-        return in_array($sortBy, $allowedSorts, true) ? $sortBy : 'registered_at';
+                $this->applyPhoneKeywordFilter($inner, $term);
+            });
+        }
     }
 
-    private function sortOrder(Request $request): string
+    private function keywordTerms(string $keyword): array
     {
-        return $request->input('sort_order', 'desc') === 'asc' ? 'asc' : 'desc';
+        return preg_split('/\s+/u', trim($keyword), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    }
+
+    private function shouldUseFullText(string $term): bool
+    {
+        return DB::connection()->getDriverName() === 'mysql' && mb_strlen($term) > 1;
+    }
+
+    private function booleanPhrase(string $term): string
+    {
+        return '+"'.str_replace(['\\', '"'], ['\\\\', '\"'], $term).'"';
+    }
+
+    private function applyTextLikeKeywordFilter(Builder $query, string $term): void
+    {
+        $query->where('business_name', 'like', "%{$term}%")
+            ->orWhere('address', 'like', "%{$term}%")
+            ->orWhere('sales_memo', 'like', "%{$term}%");
+    }
+
+    private function applyPhoneKeywordFilter(Builder $query, string $term): void
+    {
+        $normalizedTerm = $this->normalizePhoneKeyword($term);
+
+        if ($normalizedTerm === '') {
+            return;
+        }
+
+        foreach (['head_office_phone', 'public_phone', 'contact_phone'] as $column) {
+            $query->orWhereRaw($this->normalizedPhoneColumnExpression($column).' like ?', ["%{$normalizedTerm}%"]);
+        }
+    }
+
+    private function normalizePhoneKeyword(string $term): string
+    {
+        return preg_replace('/\D+/u', '', $term) ?? '';
+    }
+
+    private function normalizedPhoneColumnExpression(string $column): string
+    {
+        $expression = $column;
+
+        foreach (['-', ' ', '　', '(', ')'] as $character) {
+            $expression = "REPLACE({$expression}, '{$character}', '')";
+        }
+
+        return $expression;
+    }
+
+    private function applySort(Builder $query, Request $request): void
+    {
+        $sortBy = $this->sortBy($request);
+        $sortOrder = $this->sortOrder($request);
+
+        if ($sortBy === 'next_action_at') {
+            $query->orderByRaw('next_action_at is null')
+                ->orderBy('next_action_at', $sortOrder)
+                ->orderByDesc('id');
+
+            return;
+        }
+
+        $query->orderBy($sortBy, $sortOrder)
+            ->orderByDesc('id');
+    }
+
+    public function sortBy(Request $request): string
+    {
+        $sortBy = $request->input('sort_by', 'next_action_at');
+        $allowedSorts = ['last_action_at', 'next_action_at', 'ota_count', 'status'];
+
+        return in_array($sortBy, $allowedSorts, true) ? $sortBy : 'next_action_at';
+    }
+
+    public function sortOrder(Request $request): string
+    {
+        $defaultOrder = $this->sortBy($request) === 'next_action_at' ? 'asc' : 'desc';
+
+        return $request->input('sort_order', $defaultOrder) === 'desc' ? 'desc' : 'asc';
     }
 
     private function perPage(Request $request): int

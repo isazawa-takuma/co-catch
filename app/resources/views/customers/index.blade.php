@@ -3,7 +3,6 @@
         $isUserScreen = request()->routeIs('user.*');
         $indexRoute = $isUserScreen ? 'user.customers.index' : 'customers.index';
         $showRoute = $isUserScreen ? 'user.customers.show' : 'customers.show';
-        $updateRoute = $isUserScreen ? 'user.customers.update' : 'customers.update';
         $currentSortBy = $filters['sort_by'] ?? 'next_action_at';
         $currentSortOrder = $filters['sort_order'] ?? 'asc';
         $activeHeaderSortBy = request()->filled('sort_by') ? $currentSortBy : null;
@@ -170,15 +169,7 @@
                                     <td>{{ $customer->ota_count }}</td>
                                     <td>{{ $customer->request_booking_status }}</td>
                                     <td class="status-col">
-                                        <span class="status-pill status-pill--{{ [
-                                            '未対応' => 'not-started',
-                                            '連絡済み' => 'contacted',
-                                            'やり取り中' => 'in-progress',
-                                            'アポイント' => 'appointment',
-                                            '商談中' => 'negotiation',
-                                            '契約' => 'contracted',
-                                            '失注' => 'lost',
-                                        ][$customer->status] ?? 'default' }}" data-customer-status-pill>{{ $customer->status }}</span>
+                                        <span class="status-pill status-pill--{{ \App\Models\Customer::statusClass($customer->status) }}" data-customer-status-pill>{{ $customer->status }}</span>
                                     </td>
                                     <td class="owner-col">
                                         @if ($isUserScreen)
@@ -199,51 +190,9 @@
                                     </td>
                                     <td>{{ optional($customer->last_action_at)->format('Y/m/d') ?? '-' }}</td>
                                     <td>
-                                        <form method="post" action="{{ route($updateRoute, $customer) }}" class="date-inline">
-                                            @csrf
-                                            @method('patch')
-                                            <input type="hidden" name="redirect_to" value="{{ url()->full() }}">
-                                            <div class="list-date-picker" data-list-date-picker data-submit-on-apply="true">
-                                                <input type="hidden" name="next_action_at" value="{{ optional($customer->next_action_at)->format('Y-m-d') }}" data-list-date-value>
-                                                <button
-                                                    class="list-date-picker__trigger"
-                                                    type="button"
-                                                    aria-haspopup="dialog"
-                                                    aria-expanded="false"
-                                                    aria-controls="next-action-calendar-{{ $customer->id }}"
-                                                >
-                                                    <span data-list-date-label></span>
-                                                    <img class="list-date-picker__icon" src="{{ asset('images/calendar.png') }}" alt="" aria-hidden="true">
-                                                </button>
-                                                <section
-                                                    id="next-action-calendar-{{ $customer->id }}"
-                                                    class="list-date-picker__calendar"
-                                                    role="dialog"
-                                                    aria-label="次回アクション日を選択"
-                                                    hidden
-                                                >
-                                                    <header class="list-date-picker__head">
-                                                        <button class="list-date-picker__nav" type="button" data-prev-month aria-label="前月">‹</button>
-                                                        <h2 class="list-date-picker__month" data-month-label></h2>
-                                                        <button class="list-date-picker__nav" type="button" data-next-month aria-label="翌月">›</button>
-                                                    </header>
-                                                    <div class="list-date-picker__weekdays" aria-hidden="true">
-                                                        <span>日</span>
-                                                        <span>月</span>
-                                                        <span>火</span>
-                                                        <span>水</span>
-                                                        <span>木</span>
-                                                        <span>金</span>
-                                                        <span>土</span>
-                                                    </div>
-                                                    <div class="list-date-picker__dates" data-dates role="grid" aria-label="日付"></div>
-                                                    <footer class="list-date-picker__foot">
-                                                        <button class="list-date-picker__text-button" type="button" data-clear>クリア</button>
-                                                        <button class="list-date-picker__text-button" type="button" data-today>今日</button>
-                                                    </footer>
-                                                </section>
-                                            </div>
+                                        <div class="date-inline">
                                             @if ($customer->next_action_at)
+                                                <span>{{ $customer->next_action_at->format('Y/m/d') }}</span>
                                                 @if ($customer->next_action_at->isToday())
                                                     <span class="badge danger">本日対応</span>
                                                 @elseif ($customer->next_action_at->isPast() && ! $customer->next_action_at->isToday())
@@ -252,7 +201,7 @@
                                             @else
                                                 <span class="muted-text">未設定</span>
                                             @endif
-                                        </form>
+                                        </div>
                                     </td>
                                 </tr>
                             @endforeach
