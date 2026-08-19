@@ -373,7 +373,7 @@ textarea {
 
 .filters {
     display: grid;
-    grid-template-columns: minmax(300px, auto) minmax(150px, 180px) minmax(260px, 1.4fr) auto;
+    grid-template-columns: minmax(360px, auto) minmax(150px, 180px) minmax(240px, 1.2fr) auto;
     align-items: end;
     gap: 12px;
     padding: 14px;
@@ -381,8 +381,26 @@ textarea {
 
 .filters__date-range {
     display: grid;
-    grid-template-columns: repeat(2, minmax(120px, 1fr));
+    gap: 6px;
+    min-width: 0;
+}
+
+.filters__date-range-label {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.filters__date-range-controls {
+    display: grid;
+    grid-template-columns: minmax(130px, 1fr) auto minmax(130px, 1fr);
+    align-items: center;
     gap: 8px;
+}
+
+.filters__date-range-separator {
+    color: var(--text);
+    font-size: 18px;
+    line-height: 1;
 }
 
 .filters__date-range .list-date-picker,
@@ -1688,7 +1706,7 @@ th.sticky-col {
 
 @media (max-width: 1120px) {
     .filters {
-        grid-template-columns: minmax(300px, auto) minmax(150px, 180px) minmax(200px, 1fr);
+        grid-template-columns: minmax(360px, auto) minmax(150px, 180px) minmax(200px, 1fr);
     }
 
     .filters > .filter-actions {

@@ -40,9 +40,9 @@
 
     <div class="list-layout">
         <form class="filters" method="get" action="{{ route($indexRoute) }}">
-            <div class="filters__date-range">
-                <label>
-                    開始日
+            <div class="filters__date-range" aria-labelledby="next-action-period-label">
+                <span id="next-action-period-label" class="filters__date-range-label">期間</span>
+                <div class="filters__date-range-controls">
                     <div class="list-date-picker" data-list-date-picker>
                         <input type="hidden" name="next_action_from" value="{{ $filters['next_action_from'] ?? '' }}" data-list-date-value>
                         <button
@@ -83,9 +83,7 @@
                             </footer>
                         </section>
                     </div>
-                </label>
-                <label>
-                    終了日
+                    <span class="filters__date-range-separator" aria-hidden="true">〜</span>
                     <div class="list-date-picker" data-list-date-picker>
                         <input type="hidden" name="next_action_to" value="{{ $filters['next_action_to'] ?? '' }}" data-list-date-value>
                         <button
@@ -126,7 +124,7 @@
                             </footer>
                         </section>
                     </div>
-                </label>
+                </div>
             </div>
             <label>
                 ステータス

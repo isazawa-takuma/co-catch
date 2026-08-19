@@ -231,6 +231,7 @@ class CustomerListTest extends TestCase
         $response = $this->get('/opnavi/admin/customers');
 
         $response->assertOk();
+        $response->assertSee('期間');
         $response->assertSee('事業者名・電話番号・住所・営業メモ');
         $response->assertSee('name="next_action_from"', false);
         $response->assertSee('name="next_action_to"', false);
