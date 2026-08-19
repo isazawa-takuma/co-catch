@@ -390,6 +390,19 @@ class CustomerListTest extends TestCase
         $response->assertSee('status-pill--contracted', false);
     }
 
+    public function test_customer_detail_hides_registered_at_field(): void
+    {
+        $customer = Customer::create($this->customerData());
+
+        $response = $this->get('/opnavi/admin/customers/'.$customer->id);
+
+        $response->assertOk();
+        $response->assertSee('次回アクション日');
+        $response->assertDontSee('name="registered_at"', false);
+        $response->assertDontSee('detail-registered-calendar-', false);
+        $response->assertDontSee('aria-label="登録日を選択"', false);
+    }
+
     public function test_detail_navigation_follows_current_list_sort_order(): void
     {
         $first = Customer::create($this->customerData([

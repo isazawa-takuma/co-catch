@@ -157,50 +157,6 @@
                     </section>
                 </div>
             </label>
-            <label>
-                登録日
-                <div class="list-date-picker" data-list-date-picker>
-                    <input type="hidden" name="registered_at" value="{{ optional($customer->registered_at)->format('Y-m-d') }}" data-list-date-value required @disabled($isUserScreen)>
-                    <button
-                        class="list-date-picker__trigger"
-                        type="button"
-                        aria-haspopup="dialog"
-                        aria-expanded="false"
-                        aria-controls="detail-registered-calendar-{{ $customer->id }}"
-                        @disabled($isUserScreen)
-                    >
-                        <span data-list-date-label></span>
-                        <img class="list-date-picker__icon" src="{{ asset('images/calendar.png') }}" alt="" aria-hidden="true">
-                    </button>
-                    <section
-                        id="detail-registered-calendar-{{ $customer->id }}"
-                        class="list-date-picker__calendar"
-                        role="dialog"
-                        aria-label="登録日を選択"
-                        hidden
-                    >
-                        <header class="list-date-picker__head">
-                            <button class="list-date-picker__nav" type="button" data-prev-month aria-label="前月">‹</button>
-                            <h2 class="list-date-picker__month" data-month-label></h2>
-                            <button class="list-date-picker__nav" type="button" data-next-month aria-label="翌月">›</button>
-                        </header>
-                        <div class="list-date-picker__weekdays" aria-hidden="true">
-                            <span>日</span>
-                            <span>月</span>
-                            <span>火</span>
-                            <span>水</span>
-                            <span>木</span>
-                            <span>金</span>
-                            <span>土</span>
-                        </div>
-                        <div class="list-date-picker__dates" data-dates role="grid" aria-label="日付"></div>
-                        <footer class="list-date-picker__foot">
-                            <button class="list-date-picker__text-button" type="button" data-clear>クリア</button>
-                            <button class="list-date-picker__text-button" type="button" data-today>今日</button>
-                        </footer>
-                    </section>
-                </div>
-            </label>
             <label class="span-2">
                 営業メモ
                 <textarea name="sales_memo" rows="4">{{ $customer->sales_memo }}</textarea>
