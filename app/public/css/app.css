@@ -373,10 +373,21 @@ textarea {
 
 .filters {
     display: grid;
-    grid-template-columns: auto minmax(150px, 180px) minmax(320px, 2fr) auto;
+    grid-template-columns: minmax(300px, auto) minmax(150px, 180px) minmax(260px, 1.4fr) auto;
     align-items: end;
     gap: 12px;
     padding: 14px;
+}
+
+.filters__date-range {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+    gap: 8px;
+}
+
+.filters__date-range .list-date-picker,
+.filters__date-range .list-date-picker__trigger {
+    width: 100%;
 }
 
 .filters__keyword {
@@ -400,20 +411,6 @@ textarea {
 
 .per-page-control select {
     width: 110px;
-}
-
-.today-action-button {
-    align-self: end;
-    background: #f97316;
-    border-color: #ea580c;
-    color: #fff;
-    font-weight: 700;
-    justify-self: start;
-    white-space: nowrap;
-}
-
-.today-action-button:hover {
-    background: #ea580c;
 }
 
 .filter-actions {
@@ -1691,7 +1688,7 @@ th.sticky-col {
 
 @media (max-width: 1120px) {
     .filters {
-        grid-template-columns: auto minmax(150px, 180px) minmax(220px, 1fr);
+        grid-template-columns: minmax(300px, auto) minmax(150px, 180px) minmax(200px, 1fr);
     }
 
     .filters > .filter-actions {
@@ -1903,6 +1900,10 @@ th.sticky-col {
     .filters {
         grid-template-columns: 1fr;
         align-items: stretch;
+    }
+
+    .filters__date-range {
+        grid-template-columns: 1fr;
     }
 
     .filters__keyword {

@@ -193,39 +193,35 @@ class CustomerListTest extends TestCase
         $response->assertDontSee('体験内容だけ一致');
     }
 
-    public function test_today_action_button_filters_customers_to_today_next_action(): void
+    public function test_next_action_date_range_filters_with_status_and_keyword(): void
     {
-        $today = now()->toDateString();
-        $tomorrow = now()->addDay()->toDateString();
-
         Customer::create($this->customerData([
-            'business_name' => '当日対応顧客',
-            'next_action_at' => $today,
+            'business_name' => '期間内の対象顧客',
+            'status' => 'やり取り中',
+            'sales_memo' => '再架電予定',
+            'next_action_at' => '2026-08-20 10:00:00',
         ]));
         Customer::create($this->customerData([
-            'business_name' => '明日対応顧客',
-            'next_action_at' => $tomorrow,
+            'business_name' => '期間外の顧客',
+            'status' => 'やり取り中',
+            'sales_memo' => '再架電予定',
+            'next_action_at' => '2026-08-25 10:00:00',
             'address' => '埼玉県さいたま市2-2-2',
         ]));
+        Customer::create($this->customerData([
+            'business_name' => 'ステータス違い顧客',
+            'status' => '未対応',
+            'sales_memo' => '再架電予定',
+            'next_action_at' => '2026-08-20 11:00:00',
+            'address' => '埼玉県さいたま市3-3-3',
+        ]));
 
-        $response = $this->get('/opnavi/admin/customers');
-
-        $response->assertOk();
-        $response->assertSee('当日対応');
-        $response->assertSee('today_action=1', false);
-
-        $response = $this->get('/opnavi/admin/customers?keyword=明日&status=やり取り中');
-
-        $response->assertOk();
-        $response->assertSee('href="http://localhost:8080/opnavi/admin/customers?today_action=1"', false);
-        $response->assertDontSee('today_action=1&amp;keyword=', false);
-        $response->assertDontSee('today_action=1&amp;status=', false);
-
-        $response = $this->get('/opnavi/admin/customers?today_action=1');
+        $response = $this->get('/opnavi/admin/customers?next_action_from=2026-08-19&next_action_to=2026-08-21&status=やり取り中&keyword='.urlencode('再架電'));
 
         $response->assertOk();
-        $response->assertSee('当日対応顧客');
-        $response->assertDontSee('明日対応顧客');
+        $response->assertSee('期間内の対象顧客');
+        $response->assertDontSee('期間外の顧客');
+        $response->assertDontSee('ステータス違い顧客');
     }
 
     public function test_customer_search_form_hides_region_filter_and_chip_buttons(): void
@@ -236,6 +232,15 @@ class CustomerListTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('事業者名・電話番号・住所・営業メモ');
+        $response->assertSee('name="next_action_from"', false);
+        $response->assertSee('name="next_action_to"', false);
+        $response->assertSee('id="search-next-action-from-calendar"', false);
+        $response->assertSee('id="search-next-action-to-calendar"', false);
+        $response->assertSee('aria-label="開始日を選択"', false);
+        $response->assertSee('aria-label="終了日を選択"', false);
+        $response->assertDontSee('type="date"', false);
+        $response->assertDontSee('当日対応');
+        $response->assertDontSee('today_action=1', false);
         $response->assertDontSee('name="region"', false);
         $response->assertDontSee('class="chips"', false);
         $response->assertDontSee('chip=not_started', false);
@@ -303,17 +308,17 @@ class CustomerListTest extends TestCase
         $response->assertSee('href="http://localhost:8080/opnavi/admin/customers?keyword=%E9%99%B6%E8%8A%B8"', false);
     }
 
-    public function test_customer_list_next_action_is_readonly_date_text(): void
+    public function test_customer_list_next_action_is_readonly_datetime_text(): void
     {
         Customer::create($this->customerData([
             'business_name' => '次回アクション表示対象',
-            'next_action_at' => '2026-07-23',
+            'next_action_at' => '2026-07-23 14:30:00',
         ]));
 
         $response = $this->get('/opnavi/admin/customers');
 
         $response->assertOk();
-        $response->assertSee('2026/07/23');
+        $response->assertSee('2026/07/23 14:30');
         $response->assertDontSee('name="next_action_at"', false);
         $response->assertDontSee('data-submit-on-apply="true"', false);
         $response->assertDontSee('next-action-calendar-', false);
@@ -398,6 +403,9 @@ class CustomerListTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('次回アクション日');
+        $response->assertSee('name="next_action_at"', false);
+        $response->assertSee('data-date-time-picker', false);
+        $response->assertSee('aria-label="次回アクション日時を選択"', false);
         $response->assertDontSee('name="registered_at"', false);
         $response->assertDontSee('detail-registered-calendar-', false);
         $response->assertDontSee('aria-label="登録日を選択"', false);
@@ -661,7 +669,7 @@ class CustomerListTest extends TestCase
             'business_name' => '変更されてはいけない',
             'owner_id' => null,
             'contact_phone' => '09099998888',
-            'next_action_at' => '2026-07-31',
+            'next_action_at' => '2026-07-31T13:45',
             'sales_memo' => 'ユーザー画面で更新',
         ]);
 
@@ -673,7 +681,7 @@ class CustomerListTest extends TestCase
         $this->assertSame('変更前事業者', $customer->business_name);
         $this->assertEquals($owner->id, $customer->owner_id);
         $this->assertSame('09099998888', $customer->contact_phone);
-        $this->assertSame('2026-07-31', $customer->next_action_at->format('Y-m-d'));
+        $this->assertSame('2026-07-31 13:45', $customer->next_action_at->format('Y-m-d H:i'));
         $this->assertSame('ユーザー画面で更新', $customer->sales_memo);
     }
 

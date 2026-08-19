@@ -40,7 +40,94 @@
 
     <div class="list-layout">
         <form class="filters" method="get" action="{{ route($indexRoute) }}">
-            <a class="button today-action-button" href="{{ route($indexRoute, ['today_action' => 1]) }}">当日対応</a>
+            <div class="filters__date-range">
+                <label>
+                    開始日
+                    <div class="list-date-picker" data-list-date-picker>
+                        <input type="hidden" name="next_action_from" value="{{ $filters['next_action_from'] ?? '' }}" data-list-date-value>
+                        <button
+                            class="list-date-picker__trigger"
+                            type="button"
+                            aria-haspopup="dialog"
+                            aria-expanded="false"
+                            aria-controls="search-next-action-from-calendar"
+                        >
+                            <span data-list-date-label></span>
+                            <img class="list-date-picker__icon" src="{{ asset('images/calendar.png') }}" alt="" aria-hidden="true">
+                        </button>
+                        <section
+                            id="search-next-action-from-calendar"
+                            class="list-date-picker__calendar"
+                            role="dialog"
+                            aria-label="開始日を選択"
+                            hidden
+                        >
+                            <header class="list-date-picker__head">
+                                <button class="list-date-picker__nav" type="button" data-prev-month aria-label="前月">‹</button>
+                                <h2 class="list-date-picker__month" data-month-label></h2>
+                                <button class="list-date-picker__nav" type="button" data-next-month aria-label="翌月">›</button>
+                            </header>
+                            <div class="list-date-picker__weekdays" aria-hidden="true">
+                                <span>日</span>
+                                <span>月</span>
+                                <span>火</span>
+                                <span>水</span>
+                                <span>木</span>
+                                <span>金</span>
+                                <span>土</span>
+                            </div>
+                            <div class="list-date-picker__dates" data-dates role="grid" aria-label="日付"></div>
+                            <footer class="list-date-picker__foot">
+                                <button class="list-date-picker__text-button" type="button" data-clear>クリア</button>
+                                <button class="list-date-picker__text-button" type="button" data-today>今日</button>
+                            </footer>
+                        </section>
+                    </div>
+                </label>
+                <label>
+                    終了日
+                    <div class="list-date-picker" data-list-date-picker>
+                        <input type="hidden" name="next_action_to" value="{{ $filters['next_action_to'] ?? '' }}" data-list-date-value>
+                        <button
+                            class="list-date-picker__trigger"
+                            type="button"
+                            aria-haspopup="dialog"
+                            aria-expanded="false"
+                            aria-controls="search-next-action-to-calendar"
+                        >
+                            <span data-list-date-label></span>
+                            <img class="list-date-picker__icon" src="{{ asset('images/calendar.png') }}" alt="" aria-hidden="true">
+                        </button>
+                        <section
+                            id="search-next-action-to-calendar"
+                            class="list-date-picker__calendar"
+                            role="dialog"
+                            aria-label="終了日を選択"
+                            hidden
+                        >
+                            <header class="list-date-picker__head">
+                                <button class="list-date-picker__nav" type="button" data-prev-month aria-label="前月">‹</button>
+                                <h2 class="list-date-picker__month" data-month-label></h2>
+                                <button class="list-date-picker__nav" type="button" data-next-month aria-label="翌月">›</button>
+                            </header>
+                            <div class="list-date-picker__weekdays" aria-hidden="true">
+                                <span>日</span>
+                                <span>月</span>
+                                <span>火</span>
+                                <span>水</span>
+                                <span>木</span>
+                                <span>金</span>
+                                <span>土</span>
+                            </div>
+                            <div class="list-date-picker__dates" data-dates role="grid" aria-label="日付"></div>
+                            <footer class="list-date-picker__foot">
+                                <button class="list-date-picker__text-button" type="button" data-clear>クリア</button>
+                                <button class="list-date-picker__text-button" type="button" data-today>今日</button>
+                            </footer>
+                        </section>
+                    </div>
+                </label>
+            </div>
             <label>
                 ステータス
                 <select name="status">
@@ -192,7 +279,7 @@
                                     <td>
                                         <div class="date-inline">
                                             @if ($customer->next_action_at)
-                                                <span>{{ $customer->next_action_at->format('Y/m/d') }}</span>
+                                                <span>{{ $customer->next_action_at->format('Y/m/d H:i') }}</span>
                                                 @if ($customer->next_action_at->isToday())
                                                     <span class="badge danger">本日対応</span>
                                                 @elseif ($customer->next_action_at->isPast() && ! $customer->next_action_at->isToday())

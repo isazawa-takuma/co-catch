@@ -94,9 +94,15 @@ class CustomerQueryService
             }
         }
 
-        if ($request->boolean('today_action')) {
-            $query->whereDate('next_action_at', now()->toDateString());
-        } elseif ($request->input('chip') === 'today') {
+        if ($request->filled('next_action_from')) {
+            $query->whereDate('next_action_at', '>=', $request->input('next_action_from'));
+        }
+
+        if ($request->filled('next_action_to')) {
+            $query->whereDate('next_action_at', '<=', $request->input('next_action_to'));
+        }
+
+        if ($request->input('chip') === 'today') {
             $query->whereDate('next_action_at', now()->toDateString());
         } elseif ($request->input('chip') === 'overdue') {
             $query->whereNotNull('next_action_at')->whereDate('next_action_at', '<', now()->toDateString());

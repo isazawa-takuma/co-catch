@@ -92,7 +92,7 @@ class Customer extends Model
     protected $casts = [
         'registered_at' => 'date',
         'last_action_at' => 'date',
-        'next_action_at' => 'date',
+        'next_action_at' => 'datetime',
     ];
 
     protected static function booted(): void
