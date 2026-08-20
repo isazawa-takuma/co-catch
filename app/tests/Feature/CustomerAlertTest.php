@@ -58,17 +58,44 @@ class CustomerAlertTest extends TestCase
             'next_action_alert_enabled' => true,
             'address' => '埼玉県さいたま市3-3-3',
         ]));
+        Customer::create($this->customerData([
+            'business_name' => '古いアラート事業者',
+            'next_action_at' => '2026-08-20 09:44:00',
+            'next_action_alert_enabled' => true,
+            'address' => '埼玉県さいたま市4-4-4',
+        ]));
 
         $response = $this->getJson('/opnavi/customer_alerts');
 
         $response->assertOk();
         $response->assertJsonFragment([
             'business_name' => '通知対象事業者',
-            'message' => '通知対象事業者の次回アクション日時が近づいてきました',
+            'message' => '通知対象事業者の次回アクション日時（2026/08/20 10:00）が近づいてきました',
             'detail_url' => 'http://localhost:8080/opnavi/admin/customers/'.$customer->id,
         ]);
         $response->assertJsonMissing(['business_name' => '通知OFF事業者']);
         $response->assertJsonMissing(['business_name' => '時間外事業者']);
+        $response->assertJsonMissing(['business_name' => '古いアラート事業者']);
+    }
+
+    public function test_customer_alert_endpoint_keeps_recently_due_alerts_available(): void
+    {
+        $this->actingAs($this->adminUser());
+        $this->travelTo('2026-08-20 10:01:00');
+
+        Customer::create($this->customerData([
+            'business_name' => '予定時刻直後の通知対象',
+            'next_action_at' => '2026-08-20 10:00:00',
+            'next_action_alert_enabled' => true,
+        ]));
+
+        $response = $this->getJson('/opnavi/customer_alerts');
+
+        $response->assertOk();
+        $response->assertJsonFragment([
+            'business_name' => '予定時刻直後の通知対象',
+            'message' => '予定時刻直後の通知対象の次回アクション日時（2026/08/20 10:00）が近づいてきました',
+        ]);
     }
 
     public function test_user_customer_alert_endpoint_returns_only_owned_customers(): void
@@ -97,6 +124,7 @@ class CustomerAlertTest extends TestCase
         $response->assertOk();
         $response->assertJsonFragment([
             'business_name' => '自分の担当事業者',
+            'message' => '自分の担当事業者の次回アクション日時（2026/08/20 10:00）が近づいてきました',
             'detail_url' => 'http://localhost:8080/opnavi/user/customers/'.$customer->id,
         ]);
         $response->assertJsonMissing(['business_name' => '他人の担当事業者']);

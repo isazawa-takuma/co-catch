@@ -115,12 +115,14 @@ class CustomerController extends Controller
     {
         $user = $request->user();
         $now = now();
+        $alertWindowStart = $now->copy()->subMinutes(10);
+        $alertWindowEnd = $now->copy()->addMinutes(5);
 
         $query = Customer::query()
             ->select(['id', 'business_name', 'next_action_at'])
             ->where('next_action_alert_enabled', true)
             ->whereNotNull('next_action_at')
-            ->whereBetween('next_action_at', [$now, $now->copy()->addMinutes(5)]);
+            ->whereBetween('next_action_at', [$alertWindowStart, $alertWindowEnd]);
 
         if (in_array($user->role, ['appointment', 'sales'], true)) {
             $query->where('owner_id', $user->id);
@@ -138,7 +140,7 @@ class CustomerController extends Controller
                 'id' => $customer->id,
                 'business_name' => $customer->business_name,
                 'next_action_at' => optional($customer->next_action_at)->format('Y-m-d\TH:i:s'),
-                'message' => "{$customer->business_name}の次回アクション日時が近づいてきました",
+                'message' => "{$customer->business_name}の次回アクション日時（{$customer->next_action_at->format('Y/m/d H:i')}）が近づいてきました",
                 'detail_url' => route($showRoute, $customer),
             ])
             ->values();
