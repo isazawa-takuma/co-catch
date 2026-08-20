@@ -102,12 +102,48 @@ class CustomerController extends Controller
         $data = $request->safe()->only([
             'contact_phone',
             'next_action_at',
+            'next_action_alert_enabled',
             'sales_memo',
         ]);
 
         $this->customerService->update($customer, $data);
 
         return $this->redirectToCustomerDetail($request, $customer, 'user')->with('status', '保存しました');
+    }
+
+    public function alerts(Request $request)
+    {
+        $user = $request->user();
+        $now = now();
+
+        $query = Customer::query()
+            ->select(['id', 'business_name', 'next_action_at'])
+            ->where('next_action_alert_enabled', true)
+            ->whereNotNull('next_action_at')
+            ->whereBetween('next_action_at', [$now, $now->copy()->addMinutes(5)]);
+
+        if (in_array($user->role, ['appointment', 'sales'], true)) {
+            $query->where('owner_id', $user->id);
+        } elseif ($user->role !== 'admin') {
+            return response()->json(['alerts' => []]);
+        }
+
+        $showRoute = $user->role === 'admin' ? 'customers.show' : 'user.customers.show';
+
+        $alerts = $query
+            ->orderBy('next_action_at')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (Customer $customer) => [
+                'id' => $customer->id,
+                'business_name' => $customer->business_name,
+                'next_action_at' => optional($customer->next_action_at)->format('Y-m-d\TH:i:s'),
+                'message' => "{$customer->business_name}の次回アクション日時が近づいてきました",
+                'detail_url' => route($showRoute, $customer),
+            ])
+            ->values();
+
+        return response()->json(['alerts' => $alerts]);
     }
 
     public function bulkUpdateOwner(CustomerBulkOwnerUpdateRequest $request)

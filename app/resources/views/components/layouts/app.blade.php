@@ -14,7 +14,13 @@
         $showsSidebar = request()->is('opnavi*') && ! request()->routeIs('admin.login', 'user.login', 'initial-setup.*');
         $customerIndexRoute = $isUserScreen ? 'user.customers.index' : 'customers.index';
     @endphp
-    <div class="app-shell {{ $showsSidebar ? 'has-sidebar' : '' }}" data-shell>
+    <div
+        class="app-shell {{ $showsSidebar ? 'has-sidebar' : '' }}"
+        data-shell
+        @if ($showsSidebar && auth()->check())
+            data-customer-alerts-url="{{ route('customer-alerts.index') }}"
+        @endif
+    >
         @if ($showsSidebar)
             <aside class="sidebar" data-sidebar>
                 <div class="sidebar__head">

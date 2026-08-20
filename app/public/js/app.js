@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeSubmitGuards(document);
     initializeActivityCollapse(document);
     initializeCustomerStatusSync(document);
+    initializeCustomerAlerts();
 });
 
 let drawerIsLoading = false;
@@ -38,6 +39,8 @@ const CUSTOMER_STATUS_CLASSES = {
 };
 
 const CUSTOMER_STATUS_SYNC_CHANNEL = 'opnavi-customer-status';
+const CUSTOMER_ALERT_STORAGE_PREFIX = 'opnavi-customer-alert';
+const CUSTOMER_ALERT_CHECK_INTERVAL_MS = 60 * 1000;
 
 function initializeSidebar() {
     document.querySelectorAll('[data-sidebar-toggle]').forEach((button) => {
@@ -385,6 +388,133 @@ function updateCustomerStatusPill(statusPill, status) {
 
     statusPill.textContent = status;
     statusPill.className = `status-pill status-pill--${CUSTOMER_STATUS_CLASSES[status] || 'default'}`;
+}
+
+function initializeCustomerAlerts() {
+    const shell = document.querySelector('[data-customer-alerts-url]');
+    if (! shell || window.customerAlertsBound === true) {
+        return;
+    }
+
+    window.customerAlertsBound = true;
+    const alertsUrl = shell.dataset.customerAlertsUrl;
+
+    const checkAlerts = async () => {
+        if (! alertsUrl || document.hidden) {
+            return;
+        }
+
+        try {
+            const response = await fetch(alertsUrl, {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+
+            if (! response.ok) {
+                return;
+            }
+
+            const payload = await response.json();
+            showCustomerAlerts(payload.alerts || []);
+        } catch {
+            // Alert checks should never interrupt normal screen operation.
+        }
+    };
+
+    window.setTimeout(checkAlerts, 1000);
+    window.setInterval(checkAlerts, CUSTOMER_ALERT_CHECK_INTERVAL_MS);
+    document.addEventListener('visibilitychange', () => {
+        if (! document.hidden) {
+            checkAlerts();
+        }
+    });
+}
+
+function showCustomerAlerts(alerts) {
+    alerts.forEach((customerAlert) => {
+        const storageKey = customerAlertStorageKey(customerAlert);
+        if (! storageKey || hasShownCustomerAlert(storageKey)) {
+            return;
+        }
+
+        rememberCustomerAlert(storageKey);
+        showCustomerAlertPopup(customerAlert);
+    });
+}
+
+function showCustomerAlertPopup(customerAlert) {
+    const container = customerAlertContainer();
+    const popup = document.createElement('section');
+    const message = document.createElement('p');
+    const openLink = document.createElement('a');
+
+    popup.className = 'customer-alert-popup';
+    popup.setAttribute('role', 'alertdialog');
+    popup.setAttribute('aria-live', 'assertive');
+
+    message.className = 'customer-alert-popup__message';
+    message.textContent = customerAlert.message || `${customerAlert.business_name}の次回アクション日時が近づいてきました`;
+
+    openLink.className = 'button primary customer-alert-popup__open';
+    openLink.href = customerAlert.detail_url || '#';
+    openLink.target = '_blank';
+    openLink.rel = 'noreferrer';
+    openLink.textContent = '開く';
+    openLink.addEventListener('click', () => {
+        popup.remove();
+        if (container.children.length === 0) {
+            container.remove();
+        }
+    });
+
+    popup.append(message, openLink);
+    container.append(popup);
+}
+
+function customerAlertContainer() {
+    let container = document.querySelector('[data-customer-alert-popups]');
+    if (! container) {
+        container = document.createElement('div');
+        container.className = 'customer-alert-popups';
+        container.dataset.customerAlertPopups = 'true';
+        document.body.append(container);
+    }
+
+    return container;
+}
+
+function customerAlertStorageKey(customerAlert) {
+    if (! customerAlert?.id || ! customerAlert?.next_action_at) {
+        return null;
+    }
+
+    return `${CUSTOMER_ALERT_STORAGE_PREFIX}:${customerAlert.id}:${customerAlert.next_action_at}`;
+}
+
+function hasShownCustomerAlert(storageKey) {
+    window.shownCustomerAlertKeys = window.shownCustomerAlertKeys || new Set();
+    if (window.shownCustomerAlertKeys.has(storageKey)) {
+        return true;
+    }
+
+    try {
+        return window.localStorage.getItem(storageKey) === 'shown';
+    } catch {
+        return false;
+    }
+}
+
+function rememberCustomerAlert(storageKey) {
+    window.shownCustomerAlertKeys = window.shownCustomerAlertKeys || new Set();
+    window.shownCustomerAlertKeys.add(storageKey);
+
+    try {
+        window.localStorage.setItem(storageKey, 'shown');
+    } catch {
+        // localStorage can be unavailable in private or restricted browser contexts.
+    }
 }
 
 function syncActiveCustomerRowStatus(scope) {

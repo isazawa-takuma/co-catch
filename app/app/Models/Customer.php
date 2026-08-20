@@ -85,6 +85,7 @@ class Customer extends Model
         'last_action_at',
         'last_action_summary',
         'next_action_at',
+        'next_action_alert_enabled',
         'next_action_summary',
         'sales_memo',
     ];
@@ -93,6 +94,7 @@ class Customer extends Model
         'registered_at' => 'date',
         'last_action_at' => 'date',
         'next_action_at' => 'datetime',
+        'next_action_alert_enabled' => 'boolean',
     ];
 
     protected static function booted(): void

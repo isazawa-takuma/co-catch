@@ -33,6 +33,7 @@ Route::post('/opnavi/logout', [LoginController::class, 'logout'])->middleware('a
 Route::middleware(['auth', 'initial.setup'])->group(function () {
     Route::get('/opnavi/password/change', [LoginController::class, 'editPassword'])->name('password.edit');
     Route::post('/opnavi/password/change', [LoginController::class, 'updatePassword'])->name('password.update');
+    Route::get('/opnavi/customer_alerts', [CustomerController::class, 'alerts'])->name('customer-alerts.index');
 });
 $missingCustomer = function (Request $request) {
     $message = '対象の顧客が見つかりません。別タブで削除された可能性があります。一覧を再読み込みしてください。';

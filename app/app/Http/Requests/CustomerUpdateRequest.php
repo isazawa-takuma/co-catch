@@ -32,6 +32,7 @@ class CustomerUpdateRequest extends FormRequest
             'status' => ['sometimes', 'required', Rule::in(Customer::STATUSES)],
             'owner_id' => ['nullable', 'exists:users,id'],
             'next_action_at' => ['nullable', 'date'],
+            'next_action_alert_enabled' => ['nullable', 'boolean'],
             'sales_memo' => ['nullable', 'string'],
             'redirect_to' => ['nullable', 'string'],
         ];

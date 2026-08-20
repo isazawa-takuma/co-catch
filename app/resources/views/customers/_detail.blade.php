@@ -114,71 +114,78 @@
                     @endforeach
                 </select>
             </label>
-            <label>
-                次回アクション日
-                <div class="date-time-picker" data-date-time-picker>
-                    <input type="hidden" name="next_action_at" value="{{ optional($customer->next_action_at)->format('Y-m-d\TH:i') }}" data-date-time-value>
-                    <button
-                        class="date-time-picker__trigger"
-                        type="button"
-                        aria-haspopup="dialog"
-                        aria-expanded="false"
-                        aria-controls="detail-next-action-datetime-{{ $customer->id }}"
-                    >
-                        <span data-date-time-label></span>
-                        <img class="date-time-picker__icon" src="{{ asset('images/calendar.png') }}" alt="" aria-hidden="true">
-                    </button>
-                    <section
-                        id="detail-next-action-datetime-{{ $customer->id }}"
-                        class="date-time-picker__panel"
-                        role="dialog"
-                        aria-label="次回アクション日時を選択"
-                        hidden
-                    >
-                        <div class="date-time-picker__grid">
-                            <div>
-                                <header class="date-time-picker__head">
-                                    <button class="date-time-picker__nav" type="button" data-prev-month aria-label="前月">‹</button>
-                                    <h2 class="date-time-picker__month" data-month-label></h2>
-                                    <button class="date-time-picker__nav" type="button" data-next-month aria-label="翌月">›</button>
-                                </header>
-                                <div class="date-time-picker__weekdays" aria-hidden="true">
-                                    <span>日</span>
-                                    <span>月</span>
-                                    <span>火</span>
-                                    <span>水</span>
-                                    <span>木</span>
-                                    <span>金</span>
-                                    <span>土</span>
+            <div class="span-2 next-action-alert-row">
+                <label class="next-action-field">
+                    次回アクション日
+                    <div class="date-time-picker" data-date-time-picker>
+                        <input type="hidden" name="next_action_at" value="{{ optional($customer->next_action_at)->format('Y-m-d\TH:i') }}" data-date-time-value>
+                        <button
+                            class="date-time-picker__trigger"
+                            type="button"
+                            aria-haspopup="dialog"
+                            aria-expanded="false"
+                            aria-controls="detail-next-action-datetime-{{ $customer->id }}"
+                        >
+                            <span data-date-time-label></span>
+                            <img class="date-time-picker__icon" src="{{ asset('images/calendar.png') }}" alt="" aria-hidden="true">
+                        </button>
+                        <section
+                            id="detail-next-action-datetime-{{ $customer->id }}"
+                            class="date-time-picker__panel"
+                            role="dialog"
+                            aria-label="次回アクション日時を選択"
+                            hidden
+                        >
+                            <div class="date-time-picker__grid">
+                                <div>
+                                    <header class="date-time-picker__head">
+                                        <button class="date-time-picker__nav" type="button" data-prev-month aria-label="前月">‹</button>
+                                        <h2 class="date-time-picker__month" data-month-label></h2>
+                                        <button class="date-time-picker__nav" type="button" data-next-month aria-label="翌月">›</button>
+                                    </header>
+                                    <div class="date-time-picker__weekdays" aria-hidden="true">
+                                        <span>日</span>
+                                        <span>月</span>
+                                        <span>火</span>
+                                        <span>水</span>
+                                        <span>木</span>
+                                        <span>金</span>
+                                        <span>土</span>
+                                    </div>
+                                    <div class="date-time-picker__dates" data-dates role="grid" aria-label="日付"></div>
                                 </div>
-                                <div class="date-time-picker__dates" data-dates role="grid" aria-label="日付"></div>
+                                <aside class="date-time-picker__time">
+                                    <strong>時刻</strong>
+                                    <div class="date-time-picker__time-row">
+                                        <select data-hour aria-label="時"></select>
+                                        <span>時</span>
+                                        <select data-minute aria-label="分"></select>
+                                        <span>分</span>
+                                    </div>
+                                    <div class="date-time-picker__shortcuts">
+                                        <button type="button" data-time-shortcut="09:00">09:00</button>
+                                        <button type="button" data-time-shortcut="12:00">12:00</button>
+                                        <button type="button" data-time-shortcut="18:00">18:00</button>
+                                    </div>
+                                    <p>日付と時刻を調整し、適用で確定します。</p>
+                                </aside>
                             </div>
-                            <aside class="date-time-picker__time">
-                                <strong>時刻</strong>
-                                <div class="date-time-picker__time-row">
-                                    <select data-hour aria-label="時"></select>
-                                    <span>時</span>
-                                    <select data-minute aria-label="分"></select>
-                                    <span>分</span>
-                                </div>
-                                <div class="date-time-picker__shortcuts">
-                                    <button type="button" data-time-shortcut="09:00">09:00</button>
-                                    <button type="button" data-time-shortcut="12:00">12:00</button>
-                                    <button type="button" data-time-shortcut="18:00">18:00</button>
-                                </div>
-                                <p>日付と時刻を調整し、適用で確定します。</p>
-                            </aside>
-                        </div>
-                        <footer class="date-time-picker__foot">
-                            <button class="date-time-picker__text-button" type="button" data-clear>クリア</button>
-                            <button class="date-time-picker__text-button" type="button" data-now>現在日時</button>
-                            <span></span>
-                            <button class="date-time-picker__text-button" type="button" data-cancel>キャンセル</button>
-                            <button class="date-time-picker__apply" type="button" data-apply>適用</button>
-                        </footer>
-                    </section>
-                </div>
-            </label>
+                            <footer class="date-time-picker__foot">
+                                <button class="date-time-picker__text-button" type="button" data-clear>クリア</button>
+                                <button class="date-time-picker__text-button" type="button" data-now>現在日時</button>
+                                <span></span>
+                                <button class="date-time-picker__text-button" type="button" data-cancel>キャンセル</button>
+                                <button class="date-time-picker__apply" type="button" data-apply>適用</button>
+                            </footer>
+                        </section>
+                    </div>
+                </label>
+                <label class="checkbox next-action-alert-toggle">
+                    <input type="hidden" name="next_action_alert_enabled" value="0">
+                    <input type="checkbox" name="next_action_alert_enabled" value="1" @checked($customer->next_action_alert_enabled)>
+                    <span>アラート</span>
+                </label>
+            </div>
             <label class="span-2">
                 営業メモ
                 <textarea name="sales_memo" rows="4">{{ $customer->sales_memo }}</textarea>

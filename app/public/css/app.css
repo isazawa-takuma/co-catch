@@ -353,6 +353,37 @@ textarea {
     color: #92400e;
 }
 
+.customer-alert-popups {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: 80;
+    display: grid;
+    gap: 10px;
+    width: min(360px, calc(100vw - 32px));
+}
+
+.customer-alert-popup {
+    display: grid;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    box-shadow: 0 16px 36px rgba(15, 23, 42, .22);
+}
+
+.customer-alert-popup__message {
+    margin: 0;
+    color: var(--text);
+    font-weight: 700;
+    line-height: 1.6;
+}
+
+.customer-alert-popup__open {
+    justify-self: start;
+}
+
 .in-modal {
     margin-top: 10px;
 }
@@ -1417,6 +1448,25 @@ th.sticky-col {
 .span-2,
 .wide {
     grid-column: 1 / -1;
+}
+
+.next-action-alert-row {
+    display: grid;
+    grid-template-columns: minmax(0, calc((100% - 12px) / 2)) auto;
+    align-items: end;
+    gap: 10px;
+    min-width: 0;
+    justify-content: start;
+}
+
+.next-action-field {
+    min-width: 0;
+}
+
+.next-action-alert-toggle {
+    min-height: 38px;
+    padding-bottom: 2px;
+    white-space: nowrap;
 }
 
 .input-with-action {
