@@ -242,29 +242,29 @@
                                     @endunless
                                     <td class="sticky-col name-cell">
                                         <div class="name-cell__inner">
-                                            <a href="{{ route($showRoute, array_merge(['customer' => $customer], request()->query())) }}" data-drawer-url="{{ route($showRoute, array_merge(['customer' => $customer, 'modal' => 1], request()->query())) }}" data-customer-id="{{ $customer->id }}">{{ $customer->business_name }}</a>
+                                            <a href="{{ route($showRoute, array_merge(['customer' => $customer], request()->query())) }}" data-drawer-url="{{ route($showRoute, array_merge(['customer' => $customer, 'modal' => 1], request()->query())) }}" data-customer-id="{{ $customer->id }}" data-customer-name-link>{{ $customer->business_name }}</a>
                                             <a class="detail-link" href="{{ route($showRoute, array_merge(['customer' => $customer], request()->query())) }}" target="_blank" rel="noreferrer" title="別タブで詳細を開く" aria-label="別タブで詳細を開く">
                                                 <img src="{{ asset('images/external-link.png') }}" alt="">
                                             </a>
                                         </div>
                                     </td>
                                     <td class="registered-col">{{ optional($customer->registered_at)->format('Y/m/d') }}</td>
-                                    <td class="region-col">{{ $customer->region }}</td>
-                                    <td class="area-col">{{ $customer->area_name }}</td>
+                                    <td class="region-col" data-customer-region>{{ $customer->region }}</td>
+                                    <td class="area-col" data-customer-area>{{ $customer->area_name }}</td>
                                     <td>{{ $customer->ota_count }}</td>
-                                    <td>{{ $customer->request_booking_status }}</td>
+                                    <td data-customer-request-booking>{{ $customer->request_booking_status }}</td>
                                     <td class="status-col">
                                         <span class="status-pill status-pill--{{ \App\Models\Customer::statusClass($customer->status) }}" data-customer-status-pill>{{ $customer->status }}</span>
                                     </td>
-                                    <td class="owner-col">
+                                    <td class="owner-col" data-customer-owner-cell>
                                         @if ($isUserScreen)
-                                            {{ $customer->owner?->name ?? '未担当' }}
+                                            <span data-customer-owner-text>{{ $customer->owner?->name ?? '未担当' }}</span>
                                         @else
                                             <form method="post" action="{{ route('customers.update', $customer) }}">
                                                 @csrf
                                                 @method('patch')
                                                 <input type="hidden" name="redirect_to" value="{{ url()->full() }}">
-                                                <select name="owner_id" onchange="this.form.submit()">
+                                                <select name="owner_id" onchange="this.form.submit()" data-customer-owner-select>
                                                     <option value="">未担当</option>
                                                     @foreach ($users as $user)
                                                         <option value="{{ $user->id }}" @selected($customer->owner_id === $user->id)>{{ $user->name }}</option>
@@ -273,9 +273,9 @@
                                             </form>
                                         @endif
                                     </td>
-                                    <td>{{ optional($customer->last_action_at)->format('Y/m/d') ?? '-' }}</td>
-                                    <td>
-                                        <div class="date-inline">
+                                    <td data-customer-last-action>{{ optional($customer->last_action_at)->format('Y/m/d') ?? '-' }}</td>
+                                    <td data-customer-next-action>
+                                        <div class="date-inline" data-customer-next-action-content>
                                             @if ($customer->next_action_at)
                                                 <span>{{ $customer->next_action_at->format('Y/m/d H:i') }}</span>
                                                 @if ($customer->next_action_at->isToday())

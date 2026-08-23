@@ -10,7 +10,31 @@
     $activityUpdateRoute = $isUserScreen ? 'user.customers.activities.update' : 'customers.activities.update';
     $detailQuery = request()->except('modal');
     $drawerQuery = array_merge($detailQuery, ['modal' => 1]);
+    $nextActionBadge = null;
+    if ($customer->next_action_at?->isToday()) {
+        $nextActionBadge = '本日対応';
+    } elseif ($customer->next_action_at && $customer->next_action_at->isPast()) {
+        $nextActionBadge = '期限切れ';
+    }
 @endphp
+
+<div
+    hidden
+    data-current-customer-list-state
+    data-customer-id="{{ $customer->id }}"
+    data-business-name="{{ $customer->business_name }}"
+    data-region="{{ $customer->region }}"
+    data-area-name="{{ $customer->area_name }}"
+    data-request-booking-status="{{ $customer->request_booking_status }}"
+    data-owner-id="{{ $customer->owner_id }}"
+    data-owner-name="{{ $customer->owner?->name ?? '未担当' }}"
+    data-status="{{ $customer->status }}"
+    data-status-class="{{ \App\Models\Customer::statusClass($customer->status) }}"
+    data-last-action-at="{{ optional($customer->last_action_at)->format('Y/m/d') ?? '-' }}"
+    data-next-action-at="{{ optional($customer->next_action_at)->format('Y/m/d H:i') }}"
+    data-next-action-empty="{{ $customer->next_action_at ? 'false' : 'true' }}"
+    data-next-action-badge="{{ $nextActionBadge }}"
+></div>
 
 <div class="detail-nav-bar">
     <div class="detail-nav">

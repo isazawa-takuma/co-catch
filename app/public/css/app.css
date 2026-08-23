@@ -355,33 +355,44 @@ textarea {
 
 .customer-alert-popups {
     position: fixed;
-    right: 18px;
-    bottom: 18px;
+    top: 18px;
+    left: 50%;
+    transform: translateX(-50%);
     z-index: 80;
     display: grid;
     gap: 10px;
-    width: min(360px, calc(100vw - 32px));
+    width: min(680px, calc(100vw - 32px));
 }
 
 .customer-alert-popup {
     display: grid;
-    gap: 12px;
-    padding: 14px;
-    border: 1px solid var(--line);
+    gap: 16px;
+    padding: 22px 24px;
+    border: 1px solid #f59e0b;
     border-radius: 8px;
-    background: var(--surface);
+    background: #fff7ed;
     box-shadow: 0 16px 36px rgba(15, 23, 42, .22);
 }
 
 .customer-alert-popup__message {
     margin: 0;
     color: var(--text);
+    font-size: 17px;
     font-weight: 700;
     line-height: 1.6;
+    text-align: center;
+}
+
+.customer-alert-popup__nowrap {
+    display: inline-block;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow-wrap: normal;
 }
 
 .customer-alert-popup__open {
-    justify-self: start;
+    justify-self: center;
+    min-width: 120px;
 }
 
 .in-modal {

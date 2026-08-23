@@ -369,7 +369,11 @@ class CustomerListTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('data-customer-row="'.$customer->id.'"', false);
+        $response->assertSee('data-customer-name-link', false);
+        $response->assertSee('data-customer-region', false);
+        $response->assertSee('data-customer-area', false);
         $response->assertSee('data-customer-status-pill', false);
+        $response->assertSee('data-customer-next-action-content', false);
         $response->assertSee('status-pill--negotiation', false);
     }
 
@@ -386,11 +390,16 @@ class CustomerListTest extends TestCase
 
     public function test_customer_detail_marks_current_status_for_cross_tab_sync(): void
     {
-        $customer = Customer::create($this->customerData(['status' => '契約']));
+        $customer = Customer::create($this->customerData([
+            'status' => '契約',
+            'next_action_at' => '2026-07-23 14:30:00',
+        ]));
 
         $response = $this->get('/opnavi/admin/customers/'.$customer->id);
 
         $response->assertOk();
+        $response->assertSee('data-current-customer-list-state', false);
+        $response->assertSee('data-next-action-at="2026/07/23 14:30"', false);
         $response->assertSee('data-current-customer-status', false);
         $response->assertSee('data-customer-id="'.$customer->id.'"', false);
         $response->assertSee('status-pill--contracted', false);

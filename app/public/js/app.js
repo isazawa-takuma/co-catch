@@ -39,7 +39,7 @@ const CUSTOMER_STATUS_CLASSES = {
 };
 
 const CUSTOMER_STATUS_SYNC_CHANNEL = 'opnavi-customer-status';
-const CUSTOMER_ALERT_STORAGE_PREFIX = 'opnavi-customer-alert';
+const CUSTOMER_ALERT_STORAGE_PREFIX = 'opnavi-customer-alert-v2';
 const CUSTOMER_ALERT_CHECK_INTERVAL_MS = 60 * 1000;
 
 function initializeSidebar() {
@@ -298,17 +298,16 @@ function initializeCustomerStatusSync(scope) {
         listenForCustomerStatusUpdates();
     }
 
-    const currentStatusElement = scope.querySelector('[data-current-customer-status]');
-    if (! currentStatusElement || currentStatusElement.dataset.statusSyncBroadcasted === 'true') {
+    const currentCustomerState = scope.querySelector('[data-current-customer-list-state]');
+    if (! currentCustomerState || currentCustomerState.dataset.listSyncBroadcasted === 'true') {
         return;
     }
 
-    currentStatusElement.dataset.statusSyncBroadcasted = 'true';
-    const customerId = currentStatusElement.dataset.customerId;
-    const status = currentStatusElement.textContent.trim();
+    currentCustomerState.dataset.listSyncBroadcasted = 'true';
+    const payload = buildCustomerListStatePayload(currentCustomerState);
 
-    if (customerId && status && hasStatusSuccessMessage(scope)) {
-        broadcastCustomerStatusUpdate(customerId, status);
+    if (payload.customerId && hasStatusSuccessMessage(scope)) {
+        broadcastCustomerStatusUpdate(payload);
     }
 }
 
@@ -343,13 +342,26 @@ function listenForCustomerStatusUpdates() {
     });
 }
 
-function broadcastCustomerStatusUpdate(customerId, status) {
-    const payload = {
-        customerId: String(customerId),
-        status,
+function buildCustomerListStatePayload(stateElement) {
+    return {
+        customerId: String(stateElement.dataset.customerId || ''),
+        businessName: stateElement.dataset.businessName || '',
+        region: stateElement.dataset.region || '',
+        areaName: stateElement.dataset.areaName || '',
+        requestBookingStatus: stateElement.dataset.requestBookingStatus || '',
+        ownerId: stateElement.dataset.ownerId || '',
+        ownerName: stateElement.dataset.ownerName || '未担当',
+        status: stateElement.dataset.status || '',
+        statusClass: stateElement.dataset.statusClass || CUSTOMER_STATUS_CLASSES[stateElement.dataset.status] || 'default',
+        lastActionAt: stateElement.dataset.lastActionAt || '-',
+        nextActionAt: stateElement.dataset.nextActionAt || '',
+        nextActionEmpty: stateElement.dataset.nextActionEmpty === 'true',
+        nextActionBadge: stateElement.dataset.nextActionBadge || '',
         timestamp: Date.now(),
     };
+}
 
+function broadcastCustomerStatusUpdate(payload) {
     applyCustomerStatusUpdate(payload);
 
     if ('BroadcastChannel' in window) {
@@ -367,12 +379,12 @@ function broadcastCustomerStatusUpdate(customerId, status) {
 }
 
 function applyCustomerStatusUpdate(payload) {
-    if (! payload?.customerId || ! payload?.status) {
+    if (! payload?.customerId) {
         return;
     }
 
     const row = findCustomerRow(payload.customerId);
-    updateCustomerStatusPill(row?.querySelector('[data-customer-status-pill]'), payload.status);
+    updateCustomerListRow(row, payload);
 }
 
 function findCustomerRow(customerId) {
@@ -388,6 +400,64 @@ function updateCustomerStatusPill(statusPill, status) {
 
     statusPill.textContent = status;
     statusPill.className = `status-pill status-pill--${CUSTOMER_STATUS_CLASSES[status] || 'default'}`;
+}
+
+function updateCustomerListRow(row, payload) {
+    if (! row) {
+        return;
+    }
+
+    setText(row.querySelector('[data-customer-name-link]'), payload.businessName);
+    setText(row.querySelector('[data-customer-region]'), payload.region);
+    setText(row.querySelector('[data-customer-area]'), payload.areaName);
+    setText(row.querySelector('[data-customer-request-booking]'), payload.requestBookingStatus);
+    setText(row.querySelector('[data-customer-last-action]'), payload.lastActionAt || '-');
+    updateCustomerOwnerCell(row, payload);
+    updateCustomerStatusPill(row.querySelector('[data-customer-status-pill]'), payload.status);
+    updateCustomerNextActionCell(row.querySelector('[data-customer-next-action-content]'), payload);
+}
+
+function setText(element, value) {
+    if (element && value !== undefined) {
+        element.textContent = value || '-';
+    }
+}
+
+function updateCustomerOwnerCell(row, payload) {
+    const ownerSelect = row.querySelector('[data-customer-owner-select]');
+    if (ownerSelect) {
+        ownerSelect.value = payload.ownerId || '';
+        return;
+    }
+
+    setText(row.querySelector('[data-customer-owner-text]'), payload.ownerName || '未担当');
+}
+
+function updateCustomerNextActionCell(container, payload) {
+    if (! container) {
+        return;
+    }
+
+    container.replaceChildren();
+
+    if (payload.nextActionEmpty || ! payload.nextActionAt) {
+        const empty = document.createElement('span');
+        empty.className = 'muted-text';
+        empty.textContent = '未設定';
+        container.append(empty);
+        return;
+    }
+
+    const date = document.createElement('span');
+    date.textContent = payload.nextActionAt;
+    container.append(date);
+
+    if (payload.nextActionBadge) {
+        const badge = document.createElement('span');
+        badge.className = 'badge danger';
+        badge.textContent = payload.nextActionBadge;
+        container.append(badge);
+    }
 }
 
 function initializeCustomerAlerts() {
@@ -435,27 +505,30 @@ function initializeCustomerAlerts() {
 function showCustomerAlerts(alerts) {
     alerts.forEach((customerAlert) => {
         const storageKey = customerAlertStorageKey(customerAlert);
-        if (! storageKey || hasShownCustomerAlert(storageKey)) {
+        if (! storageKey || hasShownCustomerAlert(storageKey) || isCustomerAlertVisible(storageKey)) {
             return;
         }
 
-        rememberCustomerAlert(storageKey);
-        showCustomerAlertPopup(customerAlert);
+        showCustomerAlertPopup(customerAlert, storageKey);
     });
 }
 
-function showCustomerAlertPopup(customerAlert) {
+function showCustomerAlertPopup(customerAlert, storageKey) {
     const container = customerAlertContainer();
     const popup = document.createElement('section');
     const message = document.createElement('p');
+    const noWrapText = document.createElement('span');
     const openLink = document.createElement('a');
 
     popup.className = 'customer-alert-popup';
+    popup.dataset.customerAlertKey = storageKey;
     popup.setAttribute('role', 'alertdialog');
     popup.setAttribute('aria-live', 'assertive');
 
     message.className = 'customer-alert-popup__message';
-    message.textContent = customerAlert.message || `${customerAlert.business_name}の次回アクション日時が近づいてきました`;
+    noWrapText.className = 'customer-alert-popup__nowrap';
+    noWrapText.textContent = customerAlert.message || `${customerAlert.business_name}の次回アクション日時が近づいてきました`;
+    message.append(noWrapText);
 
     openLink.className = 'button primary customer-alert-popup__open';
     openLink.href = customerAlert.detail_url || '#';
@@ -463,6 +536,7 @@ function showCustomerAlertPopup(customerAlert) {
     openLink.rel = 'noreferrer';
     openLink.textContent = '開く';
     openLink.addEventListener('click', () => {
+        rememberCustomerAlert(storageKey);
         popup.remove();
         if (container.children.length === 0) {
             container.remove();
@@ -506,6 +580,12 @@ function hasShownCustomerAlert(storageKey) {
     }
 }
 
+function isCustomerAlertVisible(storageKey) {
+    return Array.from(document.querySelectorAll('[data-customer-alert-key]')).some((popup) => {
+        return popup.dataset.customerAlertKey === storageKey;
+    });
+}
+
 function rememberCustomerAlert(storageKey) {
     window.shownCustomerAlertKeys = window.shownCustomerAlertKeys || new Set();
     window.shownCustomerAlertKeys.add(storageKey);
@@ -518,13 +598,14 @@ function rememberCustomerAlert(storageKey) {
 }
 
 function syncActiveCustomerRowStatus(scope) {
-    const currentStatusElement = scope.querySelector('[data-current-customer-status]');
+    const currentCustomerState = scope.querySelector('[data-current-customer-list-state]');
     const activeRow = document.querySelector('.is-drawer-active');
 
-    updateCustomerStatusPill(
-        activeRow?.querySelector('[data-customer-status-pill]'),
-        currentStatusElement?.textContent.trim(),
-    );
+    if (! currentCustomerState || ! activeRow) {
+        return;
+    }
+
+    updateCustomerListRow(activeRow, buildCustomerListStatePayload(currentCustomerState));
 }
 
 function initializeActivityCollapse(scope) {
