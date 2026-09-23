@@ -12,6 +12,10 @@ class CustomerService
             $data['prefecture'] = $this->guessPrefecture($data['region']) ?? $data['region'];
         }
 
+        if (array_key_exists('next_action_at', $data) && blank($data['next_action_at'])) {
+            $data['next_action_alert_enabled'] = false;
+        }
+
         $customer->update($data);
 
         return $customer;

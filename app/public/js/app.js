@@ -5,13 +5,17 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeNativeDateInputs(document);
     initializeListDatePickers(document);
     initializeDateTimePickers(document);
+    initializeNextActionAlertToggles(document);
     initializeComingSoon();
     initializeCustomerDrawer();
     initializeCustomerSortLinks(document);
     initializeImportModal();
     initializeUserInviteModal();
+    initializeMyPageRefreshButton();
+    initializeMyPageConfirmationModal();
     initializeRowActionMenus();
     initializeBulkOwnerForm();
+    initializeSalesOwnerPrompt(document);
     initializeSubmitGuards(document);
     initializeActivityCollapse(document);
     initializeCustomerStatusSync(document);
@@ -36,6 +40,22 @@ const CUSTOMER_STATUS_CLASSES = {
     '契約': 'contracted',
     'NG': 'ng',
     '失注': 'lost',
+    'コール': 'call',
+    'コールのみ': 'call-only',
+    '担不在': 'contact-unavailable',
+    'メモ': 'memo',
+    '情報共有': 'info-share',
+    '逆電': 'return-call',
+    '逆メール': 'return-email',
+    'APO': 'apo',
+    '逆連絡APO': 'return-contact-apo',
+    'APO変更': 'apo-change',
+    'APOキャンセル': 'apo-cancel',
+    '詰め直し': 'reschedule',
+    'HP問合せ': 'website-inquiry',
+    '初訪': 'first-visit',
+    '再訪': 'revisit',
+    '対応': 'handled',
 };
 
 const CUSTOMER_STATUS_SYNC_CHANNEL = 'opnavi-customer-status';
@@ -283,7 +303,9 @@ function initializeDrawerContent(scope) {
     initializeNativeDateInputs(scope);
     initializeListDatePickers(scope);
     initializeDateTimePickers(scope);
+    initializeNextActionAlertToggles(scope);
     initializeDrawerChangeGuard(scope);
+    initializeSalesOwnerPrompt(scope);
     initializeDrawerForms(scope);
     initializeCopyButtons(scope);
     initializeActivityCollapse(scope);
@@ -503,14 +525,71 @@ function initializeCustomerAlerts() {
 }
 
 function showCustomerAlerts(alerts) {
+    const activeAlertKeys = new Set();
+
     alerts.forEach((customerAlert) => {
         const storageKey = customerAlertStorageKey(customerAlert);
-        if (! storageKey || hasShownCustomerAlert(storageKey) || isCustomerAlertVisible(storageKey)) {
+        if (! storageKey) {
             return;
         }
 
-        showCustomerAlertPopup(customerAlert, storageKey);
+        activeAlertKeys.add(storageKey);
+        scheduleCustomerAlert(customerAlert, storageKey);
     });
+
+    clearInactiveCustomerAlertTimers(activeAlertKeys);
+}
+
+function scheduleCustomerAlert(customerAlert, storageKey) {
+    if (hasShownCustomerAlert(storageKey) || isCustomerAlertVisible(storageKey)) {
+        clearCustomerAlertTimer(storageKey);
+        return;
+    }
+
+    const scheduledAt = new Date(customerAlert.next_action_at).getTime();
+    if (! Number.isFinite(scheduledAt)) {
+        return;
+    }
+
+    const delay = scheduledAt - Date.now();
+    if (delay <= 0) {
+        clearCustomerAlertTimer(storageKey);
+        showCustomerAlertPopup(customerAlert, storageKey);
+        return;
+    }
+
+    window.customerAlertTimers = window.customerAlertTimers || new Map();
+    if (window.customerAlertTimers.has(storageKey)) {
+        return;
+    }
+
+    const timerId = window.setTimeout(() => {
+        clearCustomerAlertTimer(storageKey);
+
+        if (! hasShownCustomerAlert(storageKey) && ! isCustomerAlertVisible(storageKey)) {
+            showCustomerAlertPopup(customerAlert, storageKey);
+        }
+    }, delay);
+
+    window.customerAlertTimers.set(storageKey, timerId);
+}
+
+function clearInactiveCustomerAlertTimers(activeAlertKeys) {
+    window.customerAlertTimers = window.customerAlertTimers || new Map();
+
+    Array.from(window.customerAlertTimers.keys()).forEach((storageKey) => {
+        if (! activeAlertKeys.has(storageKey)) {
+            clearCustomerAlertTimer(storageKey);
+        }
+    });
+}
+
+function clearCustomerAlertTimer(storageKey) {
+    const timerId = window.customerAlertTimers?.get(storageKey);
+    if (timerId !== undefined) {
+        window.clearTimeout(timerId);
+        window.customerAlertTimers.delete(storageKey);
+    }
 }
 
 function showCustomerAlertPopup(customerAlert, storageKey) {
@@ -685,6 +764,7 @@ function mountDateTimePicker(picker) {
     const dates = picker.querySelector('[data-dates]');
     const hourSelect = picker.querySelector('[data-hour]');
     const minuteSelect = picker.querySelector('[data-minute]');
+    const minDate = parseYmd(picker.dataset.minDate || '');
 
     if (! valueInput || ! trigger || ! panel || ! label || ! monthLabel || ! dates || ! hourSelect || ! minuteSelect) {
         return;
@@ -698,6 +778,20 @@ function mountDateTimePicker(picker) {
     let viewDate = startOfMonth(draftDateTime);
     let focusDay = draftDateTime.getDate();
     let lastActiveCell = null;
+
+    const isBeforeMinDate = (date) => Boolean(minDate && startOfDay(date) < minDate);
+
+    const fallbackSelectableDateTime = () => {
+        const fallback = roundToFiveMinutes(new Date());
+
+        if (! isBeforeMinDate(fallback)) {
+            return fallback;
+        }
+
+        fallback.setFullYear(minDate.getFullYear(), minDate.getMonth(), minDate.getDate());
+
+        return fallback;
+    };
 
     const syncTimeControls = () => {
         const minute = draftDateTime.getMinutes() - (draftDateTime.getMinutes() % 5);
@@ -719,26 +813,31 @@ function mountDateTimePicker(picker) {
             const dayOffset = index - firstWeekday + 1;
             const cellDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), dayOffset);
             const isOutside = dayOffset < 1 || dayOffset > monthDays;
+            const isDisabled = isBeforeMinDate(cellDate);
             const isSelected = sameDay(cellDate, draftDateTime);
-            const isFocusTarget = ! isOutside && cellDate.getDate() === Math.min(focusDay, monthDays);
+            const isFocusTarget = ! isDisabled && ! isOutside && cellDate.getDate() === Math.min(focusDay, monthDays);
             const button = document.createElement('button');
 
             button.type = 'button';
-            button.className = `date-time-picker__day${isOutside ? ' is-outside' : ''}${isSelected ? ' is-selected' : ''}${isFocusTarget ? ' is-focused' : ''}`;
+            button.className = `date-time-picker__day${isOutside ? ' is-outside' : ''}${isDisabled ? ' is-disabled' : ''}${isSelected ? ' is-selected' : ''}${isFocusTarget ? ' is-focused' : ''}`;
             button.textContent = cellDate.getDate();
             button.setAttribute('role', 'gridcell');
             button.setAttribute('aria-label', formatJapaneseDate(cellDate));
             button.setAttribute('aria-selected', String(isSelected));
+            button.disabled = isDisabled;
+            button.setAttribute('aria-disabled', String(isDisabled));
             button.tabIndex = isFocusTarget ? 0 : -1;
-            button.addEventListener('click', () => {
-                draftDateTime.setFullYear(cellDate.getFullYear(), cellDate.getMonth(), cellDate.getDate());
-                viewDate = startOfMonth(draftDateTime);
-                focusDay = draftDateTime.getDate();
-                render();
-            });
+            if (! isDisabled) {
+                button.addEventListener('click', () => {
+                    draftDateTime.setFullYear(cellDate.getFullYear(), cellDate.getMonth(), cellDate.getDate());
+                    viewDate = startOfMonth(draftDateTime);
+                    focusDay = draftDateTime.getDate();
+                    render();
+                });
+            }
             dates.append(button);
 
-            if (isFocusTarget) {
+            if (isFocusTarget || (! lastActiveCell && ! isDisabled && ! isOutside)) {
                 lastActiveCell = button;
             }
         }
@@ -759,7 +858,7 @@ function mountDateTimePicker(picker) {
 
     const openPanel = () => {
         committedDateTime = parseLocalDateTime(valueInput.value);
-        draftDateTime = committedDateTime ? new Date(committedDateTime) : roundToFiveMinutes(new Date());
+        draftDateTime = committedDateTime && ! isBeforeMinDate(committedDateTime) ? new Date(committedDateTime) : fallbackSelectableDateTime();
         viewDate = startOfMonth(draftDateTime);
         focusDay = draftDateTime.getDate();
         render();
@@ -807,6 +906,14 @@ function mountDateTimePicker(picker) {
     picker.querySelector('[data-cancel]')?.addEventListener('click', () => closePanel(true));
     picker.querySelector('[data-apply]')?.addEventListener('click', () => {
         draftDateTime.setHours(Number(hourSelect.value), Number(minuteSelect.value), 0, 0);
+        if (isBeforeMinDate(draftDateTime)) {
+            draftDateTime = fallbackSelectableDateTime();
+            viewDate = startOfMonth(draftDateTime);
+            focusDay = draftDateTime.getDate();
+            render();
+            return;
+        }
+
         committedDateTime = new Date(draftDateTime);
         valueInput.value = toLocalDateTimeValue(committedDateTime);
         valueInput.dispatchEvent(new Event('change', { bubbles: true }));
@@ -848,6 +955,35 @@ function mountDateTimePicker(picker) {
     }, true);
 
     render();
+}
+
+function initializeNextActionAlertToggles(scope) {
+    scope.querySelectorAll('.next-action-alert-row').forEach((row) => {
+        if (row.dataset.nextActionAlertBound === 'true') {
+            return;
+        }
+
+        const dateInput = row.querySelector('input[name="next_action_at"]');
+        const alertCheckbox = row.querySelector('[data-next-action-alert-checkbox]');
+
+        if (! dateInput || ! alertCheckbox) {
+            return;
+        }
+
+        row.dataset.nextActionAlertBound = 'true';
+
+        const syncAlertAvailability = () => {
+            const hasNextActionAt = dateInput.value.trim() !== '';
+            alertCheckbox.disabled = ! hasNextActionAt;
+
+            if (! hasNextActionAt) {
+                alertCheckbox.checked = false;
+            }
+        };
+
+        dateInput.addEventListener('change', syncAlertAvailability);
+        syncAlertAvailability();
+    });
 }
 
 function fillDateTimeSelect(select, min, max, step) {
@@ -1074,6 +1210,10 @@ function startOfMonth(date) {
     return new Date(date.getFullYear(), date.getMonth(), 1);
 }
 
+function startOfDay(date) {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
 function sameDay(a, b) {
     return Boolean(a && b
         && a.getFullYear() === b.getFullYear()
@@ -1254,6 +1394,10 @@ function syncConfirmedDayOptions(fields, preferredDay = null) {
 }
 
 function daysInMonth(year, month) {
+    if (year instanceof Date) {
+        return new Date(year.getFullYear(), year.getMonth() + 1, 0).getDate();
+    }
+
     return new Date(year, month, 0).getDate();
 }
 
@@ -1394,6 +1538,75 @@ function initializeDrawerForms(scope) {
             }
         });
     });
+}
+
+function initializeSalesOwnerPrompt(scope) {
+    scope.querySelectorAll('[data-activity-form]').forEach((form) => {
+        if (form.dataset.salesOwnerPromptBound === 'true') {
+            return;
+        }
+
+        const section = form.closest('.activity-section');
+        const modal = section?.querySelector('[data-sales-owner-modal]');
+        const statusSelect = form.querySelector('[data-activity-status-select]');
+        const salesOwnerInput = form.querySelector('[data-activity-sales-owner-input]');
+        const salesOwnerSelect = modal?.querySelector('[data-sales-owner-select]');
+        const confirmButton = modal?.querySelector('[data-sales-owner-confirm]');
+
+        if (! modal || ! statusSelect || ! salesOwnerInput || ! salesOwnerSelect || ! confirmButton) {
+            return;
+        }
+
+        form.dataset.salesOwnerPromptBound = 'true';
+
+        form.addEventListener('submit', (event) => {
+            if (form.dataset.salesOwnerPromptConfirmed === 'true') {
+                delete form.dataset.salesOwnerPromptConfirmed;
+                return;
+            }
+
+            if (statusSelect.value !== 'APO' || salesOwnerInput.value) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            openSalesOwnerModal(modal, salesOwnerSelect);
+        });
+
+        modal.querySelectorAll('[data-sales-owner-cancel]').forEach((button) => {
+            button.addEventListener('click', () => {
+                closeSalesOwnerModal(modal);
+            });
+        });
+
+        confirmButton.addEventListener('click', () => {
+            if (! salesOwnerSelect.value) {
+                salesOwnerSelect.focus();
+                return;
+            }
+
+            salesOwnerInput.value = salesOwnerSelect.value;
+            closeSalesOwnerModal(modal);
+            form.dataset.salesOwnerPromptConfirmed = 'true';
+            form.requestSubmit();
+        });
+
+        modal.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                closeSalesOwnerModal(modal);
+            }
+        });
+    });
+}
+
+function openSalesOwnerModal(modal, salesOwnerSelect) {
+    modal.hidden = false;
+    requestAnimationFrame(() => salesOwnerSelect.focus());
+}
+
+function closeSalesOwnerModal(modal) {
+    modal.hidden = true;
 }
 
 function showDrawerError(target, message) {
@@ -1539,6 +1752,49 @@ function closeUserInviteModal() {
     modal.hidden = true;
     modal.querySelector('[data-user-invite-form]')?.reset();
     unlockPageScroll();
+}
+
+function initializeMyPageConfirmationModal() {
+    const modal = document.querySelector('[data-mypage-confirm-modal]');
+    const openButton = document.querySelector('[data-mypage-confirm-open]');
+    if (! modal || ! openButton || openButton.disabled) {
+        return;
+    }
+
+    const closeModal = () => {
+        modal.hidden = true;
+        unlockPageScroll();
+        openButton.focus();
+    };
+
+    openButton.addEventListener('click', () => {
+        modal.hidden = false;
+        lockPageScroll();
+        modal.querySelector('button[type="submit"]')?.focus();
+    });
+
+    modal.querySelectorAll('[data-mypage-confirm-close]').forEach((button) => {
+        button.addEventListener('click', closeModal);
+    });
+
+    modal.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            closeModal();
+        }
+    });
+}
+
+function initializeMyPageRefreshButton() {
+    const button = document.querySelector('[data-mypage-refresh]');
+    if (! button) {
+        return;
+    }
+
+    button.addEventListener('click', () => {
+        button.disabled = true;
+        button.textContent = '更新中...';
+        window.location.reload();
+    });
 }
 
 function generateInitialPassword() {

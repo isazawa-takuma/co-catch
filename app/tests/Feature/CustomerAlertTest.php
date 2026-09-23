@@ -14,6 +14,7 @@ class CustomerAlertTest extends TestCase
     public function test_customer_detail_shows_and_saves_next_action_alert_checkbox(): void
     {
         $this->actingAs($this->adminUser());
+        $this->travelTo('2026-08-19 10:00:00');
         $customer = Customer::create($this->customerData([
             'next_action_at' => '2026-08-20 10:00:00',
         ]));
@@ -21,8 +22,9 @@ class CustomerAlertTest extends TestCase
         $response = $this->get('/opnavi/admin/customers/'.$customer->id);
 
         $response->assertOk();
-        $response->assertSee('アラート');
+        $response->assertSee('重要アラート');
         $response->assertSee('name="next_action_alert_enabled"', false);
+        $response->assertSee('data-min-date="2026-08-19"', false);
 
         $response = $this->patch('/opnavi/admin/customers/'.$customer->id, [
             'next_action_at' => '2026-08-20T10:00',
@@ -34,6 +36,62 @@ class CustomerAlertTest extends TestCase
             'id' => $customer->id,
             'next_action_alert_enabled' => true,
         ]);
+    }
+
+    public function test_next_action_alert_checkbox_is_disabled_without_next_action_date(): void
+    {
+        $this->actingAs($this->adminUser());
+        $customer = Customer::create($this->customerData([
+            'next_action_at' => null,
+            'next_action_alert_enabled' => true,
+        ]));
+
+        $response = $this->get('/opnavi/admin/customers/'.$customer->id);
+
+        $response->assertOk();
+        $response->assertSee('data-next-action-alert-checkbox', false);
+        $response->assertSee('disabled', false);
+        $response->assertDontSee('checked', false);
+    }
+
+    public function test_next_action_alert_is_forced_off_when_next_action_date_is_empty(): void
+    {
+        $this->actingAs($this->adminUser());
+        $customer = Customer::create($this->customerData([
+            'next_action_at' => null,
+            'next_action_alert_enabled' => false,
+        ]));
+
+        $response = $this->patch('/opnavi/admin/customers/'.$customer->id, [
+            'next_action_at' => '',
+            'next_action_alert_enabled' => '1',
+        ]);
+
+        $response->assertRedirect('/opnavi/admin/customers/'.$customer->id);
+        $this->assertDatabaseHas('opnavi_customers', [
+            'id' => $customer->id,
+            'next_action_at' => null,
+            'next_action_alert_enabled' => false,
+        ]);
+    }
+
+    public function test_customer_next_action_date_rejects_past_dates(): void
+    {
+        $this->actingAs($this->adminUser());
+        $this->travelTo('2026-08-20 10:00:00');
+        $customer = Customer::create($this->customerData([
+            'next_action_at' => null,
+        ]));
+
+        $response = $this->from('/opnavi/admin/customers/'.$customer->id)->patch('/opnavi/admin/customers/'.$customer->id, [
+            'next_action_at' => '2026-08-19T10:00',
+            'next_action_alert_enabled' => '0',
+        ]);
+
+        $response->assertRedirect('/opnavi/admin/customers/'.$customer->id);
+        $response->assertSessionHasErrors('next_action_at');
+        $customer->refresh();
+        $this->assertNull($customer->next_action_at);
     }
 
     public function test_customer_alert_endpoint_returns_alerts_five_minutes_before_next_action(): void
@@ -107,13 +165,13 @@ class CustomerAlertTest extends TestCase
 
         $customer = Customer::create($this->customerData([
             'business_name' => '自分の担当事業者',
-            'owner_id' => $user->id,
+            'sales_owner_id' => $user->id,
             'next_action_at' => '2026-08-20 10:00:00',
             'next_action_alert_enabled' => true,
         ]));
         Customer::create($this->customerData([
             'business_name' => '他人の担当事業者',
-            'owner_id' => $otherUser->id,
+            'sales_owner_id' => $otherUser->id,
             'next_action_at' => '2026-08-20 10:00:00',
             'next_action_alert_enabled' => true,
             'address' => '埼玉県さいたま市2-2-2',
@@ -134,7 +192,8 @@ class CustomerAlertTest extends TestCase
     {
         $user = $this->salesUser();
         $this->actingAs($user);
-        $customer = Customer::create($this->customerData(['owner_id' => $user->id]));
+        $this->travelTo('2026-08-19 10:00:00');
+        $customer = Customer::create($this->customerData(['sales_owner_id' => $user->id]));
 
         $response = $this->patch('/opnavi/user/customers/'.$customer->id, [
             'next_action_at' => '2026-08-20T10:00',

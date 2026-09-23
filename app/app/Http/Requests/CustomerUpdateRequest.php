@@ -31,10 +31,21 @@ class CustomerUpdateRequest extends FormRequest
             'request_booking_status' => ['nullable', 'string', 'max:255'],
             'status' => ['sometimes', 'required', Rule::in(Customer::STATUSES)],
             'owner_id' => ['nullable', 'exists:users,id'],
-            'next_action_at' => ['nullable', 'date'],
+            'sales_owner_id' => [
+                'nullable',
+                Rule::exists('users', 'id')->where(fn ($query) => $query->where('role', 'sales')->where('is_active', true)),
+            ],
+            'next_action_at' => ['nullable', 'date', 'after_or_equal:today'],
             'next_action_alert_enabled' => ['nullable', 'boolean'],
             'sales_memo' => ['nullable', 'string'],
             'redirect_to' => ['nullable', 'string'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'next_action_at.after_or_equal' => '次回アクション日は本日以降の日付を指定してください。',
         ];
     }
 }

@@ -4,6 +4,7 @@ use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\MyPageController;
 use App\Http\Controllers\UserManagementController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -59,6 +60,7 @@ Route::middleware(['auth', 'initial.setup', 'opnavi.role:admin'])->group(functio
     Route::get('/opnavi/admin/user_management', [UserManagementController::class, 'index'])->name('admin.user-management.index');
     Route::post('/opnavi/admin/user_management', [UserManagementController::class, 'store'])->name('admin.user-management.store');
     Route::post('/opnavi/admin/user_management/{user}/reissue', [UserManagementController::class, 'reissue'])->name('admin.user-management.reissue');
+    Route::get('/opnavi/admin/user_management/{user}/activities', [UserManagementController::class, 'activities'])->name('admin.user-management.activities');
     Route::get('/opnavi/admin/user_management/{user}/role/edit', [UserManagementController::class, 'editRole'])->name('admin.user-management.role.edit');
     Route::patch('/opnavi/admin/user_management/{user}/role', [UserManagementController::class, 'updateRole'])->name('admin.user-management.role');
     Route::patch('/opnavi/admin/user_management/{user}/deactivate', [UserManagementController::class, 'deactivate'])->name('admin.user-management.deactivate');
@@ -74,6 +76,8 @@ Route::middleware(['auth', 'initial.setup', 'opnavi.role:admin'])->group(functio
 });
 
 Route::middleware(['auth', 'initial.setup', 'opnavi.role:appointment,sales'])->group(function () use ($missingCustomer) {
+    Route::get('/opnavi/my_page', [MyPageController::class, 'show'])->name('mypage.show');
+    Route::post('/opnavi/my_page/confirm', [MyPageController::class, 'confirm'])->name('mypage.confirm');
     Route::get('/opnavi/user/customers', [CustomerController::class, 'userIndex'])->name('user.customers.index');
     Route::get('/opnavi/user/customers/{customer}', [CustomerController::class, 'userShow'])->missing($missingCustomer)->name('user.customers.show');
     Route::patch('/opnavi/user/customers/{customer}', [CustomerController::class, 'userUpdate'])->missing($missingCustomer)->name('user.customers.update');

@@ -28,7 +28,11 @@
                     <tbody>
                         @foreach ($users as $user)
                             <tr>
-                                <td>{{ $user->name }}</td>
+                                <td>
+                                    <a class="user-management-name-link" href="{{ route('admin.user-management.activities', $user) }}">
+                                        {{ $user->name }}
+                                    </a>
+                                </td>
                                 <td>{{ $user->email }}</td>
                                 <td>{{ $user->role }}</td>
                                 <td>{{ $user->is_active ? '有効' : '停止中' }}</td>

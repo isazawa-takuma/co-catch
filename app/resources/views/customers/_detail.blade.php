@@ -8,6 +8,7 @@
     $customerUpdateRoute = $isUserScreen ? 'user.customers.update' : 'customers.update';
     $activityStoreRoute = $isUserScreen ? 'user.customers.activities.store' : 'customers.activities.store';
     $activityUpdateRoute = $isUserScreen ? 'user.customers.activities.update' : 'customers.activities.update';
+    $activityRanks = \App\Models\Activity::RANKS;
     $detailQuery = request()->except('modal');
     $drawerQuery = array_merge($detailQuery, ['modal' => 1]);
     $nextActionBadge = null;
@@ -130,7 +131,7 @@
                 </div>
             </div>
             <label>
-                担当者
+                コール担当
                 <select name="owner_id" @disabled($isUserScreen)>
                     <option value="">未担当</option>
                     @foreach ($users as $user)
@@ -138,10 +139,19 @@
                     @endforeach
                 </select>
             </label>
+            <label>
+                営業担当
+                <select name="sales_owner_id" disabled>
+                    <option value="">未担当</option>
+                    @foreach ($salesUsers as $salesUser)
+                        <option value="{{ $salesUser->id }}" @selected($customer->sales_owner_id === $salesUser->id)>{{ $salesUser->name }}</option>
+                    @endforeach
+                </select>
+            </label>
             <div class="span-2 next-action-alert-row">
                 <label class="next-action-field">
                     次回アクション日
-                    <div class="date-time-picker" data-date-time-picker>
+                    <div class="date-time-picker" data-date-time-picker data-min-date="{{ now()->toDateString() }}">
                         <input type="hidden" name="next_action_at" value="{{ optional($customer->next_action_at)->format('Y-m-d\TH:i') }}" data-date-time-value>
                         <button
                             class="date-time-picker__trigger"
@@ -206,8 +216,15 @@
                 </label>
                 <label class="checkbox next-action-alert-toggle">
                     <input type="hidden" name="next_action_alert_enabled" value="0">
-                    <input type="checkbox" name="next_action_alert_enabled" value="1" @checked($customer->next_action_alert_enabled)>
-                    <span>アラート</span>
+                    <input
+                        type="checkbox"
+                        name="next_action_alert_enabled"
+                        value="1"
+                        data-next-action-alert-checkbox
+                        @checked($customer->next_action_alert_enabled && $customer->next_action_at)
+                        @disabled(! $customer->next_action_at)
+                    >
+                    <span>重要アラート</span>
                 </label>
             </div>
             <label class="span-2">
@@ -250,11 +267,12 @@
         <div class="toast success in-drawer">{{ session('status') }}</div>
     @endif
     <h2>架電・対応履歴</h2>
-    <form method="post" action="{{ route($activityStoreRoute, $customer) }}" class="activity-form">
+    <form method="post" action="{{ route($activityStoreRoute, $customer) }}" class="activity-form" data-activity-form>
         @csrf
         @if (request()->boolean('modal'))
             <input type="hidden" name="modal" value="1">
         @endif
+        <input type="hidden" name="sales_owner_id" value="{{ $customer->sales_owner_id }}" data-activity-sales-owner-input>
         <label>
             日時
             <div class="date-time-picker" data-date-time-picker>
@@ -321,17 +339,13 @@
             </div>
         </label>
         <label>
-            名前
-            @if ($isUserScreen)
-                <input type="hidden" name="user_id" value="{{ auth()->id() }}">
-                <input type="text" value="{{ auth()->user()->name }}" disabled>
-            @else
-                <select name="user_id" required>
-                    @foreach ($users as $user)
-                        <option value="{{ $user->id }}" @selected($customer->owner_id === $user->id)>{{ $user->name }}</option>
-                    @endforeach
-                </select>
-            @endif
+            Rank
+            <input type="hidden" name="user_id" value="{{ auth()->id() }}">
+            <select name="rank" required>
+                @foreach ($activityRanks as $rank)
+                    <option value="{{ $rank }}">{{ $rank }}</option>
+                @endforeach
+            </select>
         </label>
         <label>
             担当者
@@ -348,8 +362,8 @@
         </label>
         <label>
             ステータス
-            <select name="status" required>
-                @foreach ($statuses as $status)
+            <select name="status" required data-activity-status-select>
+                @foreach ($activityStatuses as $status)
                     <option value="{{ $status }}" @selected($customer->status === $status)>{{ $status }}</option>
                 @endforeach
             </select>
@@ -360,6 +374,28 @@
         </label>
         <button class="button primary" type="submit">履歴を登録</button>
     </form>
+
+    <div class="modal sales-owner-modal" data-sales-owner-modal hidden>
+        <div class="modal__backdrop" data-sales-owner-cancel></div>
+        <div class="modal__panel" role="dialog" aria-modal="true" aria-label="営業担当を選択">
+            <button class="modal__close icon-button" type="button" data-sales-owner-cancel aria-label="閉じる">×</button>
+            <h2>営業担当を選択</h2>
+            <p class="form-hint">APOの履歴を登録する場合は、引き継ぎ先の営業担当を選択してください。</p>
+            <label>
+                営業担当
+                <select data-sales-owner-select>
+                    <option value="">選択してください</option>
+                    @foreach ($salesUsers as $salesUser)
+                        <option value="{{ $salesUser->id }}" @selected($customer->sales_owner_id === $salesUser->id)>{{ $salesUser->name }}</option>
+                    @endforeach
+                </select>
+            </label>
+            <div class="form-actions">
+                <button class="button" type="button" data-sales-owner-cancel>戻る</button>
+                <button class="button primary" type="button" data-sales-owner-confirm>登録する</button>
+            </div>
+        </div>
+    </div>
 
     <div class="activity-list">
         @forelse ($customer->activities as $activity)
@@ -402,15 +438,20 @@
                     @endif
                     <input type="hidden" name="action_at" value="{{ $activity->action_at->format('Y-m-d\TH:i') }}">
                     <input type="hidden" name="user_id" value="{{ $isUserScreen ? auth()->id() : $activity->user_id }}">
+                    <input type="hidden" name="sales_owner_id" value="{{ $customer->sales_owner_id }}">
                     <div class="activity-item__summary">
                         <div class="activity-summary-field activity-summary-field--readonly">
                             <span>日時</span>
                             <strong>{{ $activity->action_at->format('Y/m/d H:i') }}</strong>
                         </div>
-                        <div class="activity-summary-field activity-summary-field--readonly">
-                            <span>名前</span>
-                            <strong>{{ $activity->user->name }}</strong>
-                        </div>
+                        <label class="activity-summary-field">
+                            <span>Rank</span>
+                            <select name="rank" required>
+                                @foreach ($activityRanks as $rank)
+                                    <option value="{{ $rank }}" @selected($activity->rank === $rank)>{{ $rank }}</option>
+                                @endforeach
+                            </select>
+                        </label>
                         <label class="activity-summary-field">
                             <span>担当者</span>
                             <input type="text" name="contact_person" value="{{ $activity->contact_person }}">
@@ -427,7 +468,10 @@
                         <label class="activity-summary-field">
                             <span>ステータス</span>
                             <select name="status" required>
-                                @foreach ($statuses as $status)
+                                @if ($activity->status && ! in_array($activity->status, $activityStatuses, true))
+                                    <option value="{{ $activity->status }}" selected>{{ $activity->status }}（現在値）</option>
+                                @endif
+                                @foreach ($activityStatuses as $status)
                                     <option value="{{ $status }}" @selected($activity->status === $status)>{{ $status }}</option>
                                 @endforeach
                             </select>

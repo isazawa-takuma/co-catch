@@ -24,8 +24,8 @@ class CustomerBulkOwnerUpdateRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'customer_ids.required' => '担当者を一括設定する顧客を選択してください。',
-            'customer_ids.min' => '担当者を一括設定する顧客を選択してください。',
+            'customer_ids.required' => 'コール担当を一括設定する顧客を選択してください。',
+            'customer_ids.min' => 'コール担当を一括設定する顧客を選択してください。',
         ];
     }
 }

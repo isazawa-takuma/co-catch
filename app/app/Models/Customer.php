@@ -46,6 +46,22 @@ class Customer extends Model
         '契約' => 'contracted',
         'NG' => 'ng',
         '失注' => 'lost',
+        'コール' => 'call',
+        'コールのみ' => 'call-only',
+        '担不在' => 'contact-unavailable',
+        'メモ' => 'memo',
+        '情報共有' => 'info-share',
+        '逆電' => 'return-call',
+        '逆メール' => 'return-email',
+        'APO' => 'apo',
+        '逆連絡APO' => 'return-contact-apo',
+        'APO変更' => 'apo-change',
+        'APOキャンセル' => 'apo-cancel',
+        '詰め直し' => 'reschedule',
+        'HP問合せ' => 'website-inquiry',
+        '初訪' => 'first-visit',
+        '再訪' => 'revisit',
+        '対応' => 'handled',
     ];
 
     private const PHONE_COLUMNS = [
@@ -82,6 +98,7 @@ class Customer extends Model
         'status',
         'priority',
         'owner_id',
+        'sales_owner_id',
         'last_action_at',
         'last_action_summary',
         'next_action_at',
@@ -117,6 +134,11 @@ class Customer extends Model
     public function owner()
     {
         return $this->belongsTo(User::class, 'owner_id');
+    }
+
+    public function salesOwner()
+    {
+        return $this->belongsTo(User::class, 'sales_owner_id');
     }
 
     public function otaLinks()

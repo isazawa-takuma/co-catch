@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\Activity;
 use App\Models\Customer;
 use App\Models\User;
 use App\Mail\UserInvitationMail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use RuntimeException;
@@ -71,6 +73,7 @@ class UserManagementTest extends TestCase
         $response->assertSee('戻る');
         $response->assertSee('送信');
         $response->assertSee('管理者');
+        $response->assertSee(route('admin.user-management.activities', User::where('email', 'admin@example.com')->firstOrFail()), false);
         $response->assertSee('admin@example.com');
         $response->assertSee('一般ユーザー');
         $response->assertSee('user@example.com');
@@ -88,6 +91,85 @@ class UserManagementTest extends TestCase
         $response->assertSee(route('admin.user-management.deactivate', User::where('email', 'admin@example.com')->firstOrFail()), false);
         $response->assertDontSee(route('admin.user-management.role.edit', $admin), false);
         $response->assertDontSee(route('admin.user-management.deactivate', $admin), false);
+    }
+
+    public function test_admin_can_open_user_activity_status_from_user_management(): void
+    {
+        Carbon::setTestNow('2026-08-25 15:00:00');
+
+        $admin = $this->adminUser();
+        $user = User::factory()->create([
+            'name' => '営業ユーザー',
+            'email' => 'sales-user@illuvia-inc.com',
+            'role' => 'sales',
+        ]);
+        $otherUser = User::factory()->create([
+            'role' => 'sales',
+        ]);
+        $customer = Customer::create($this->customerData([
+            'business_name' => '架電確認用事業者',
+            'owner_id' => $user->id,
+        ]));
+
+        Activity::create([
+            'customer_id' => $customer->id,
+            'user_id' => $user->id,
+            'rank' => 'A',
+            'action_at' => '2026-08-25 14:50:00',
+            'status' => 'コール',
+            'memo' => '今日登録したメモ',
+        ]);
+        Activity::create([
+            'customer_id' => $customer->id,
+            'user_id' => $user->id,
+            'rank' => 'B',
+            'action_at' => '2026-08-24 14:50:00',
+            'status' => 'コール',
+            'memo' => '今日登録した別メモ',
+        ]);
+        Activity::create([
+            'customer_id' => $customer->id,
+            'user_id' => $otherUser->id,
+            'rank' => 'A',
+            'action_at' => '2026-08-25 14:50:00',
+            'status' => 'コール',
+            'memo' => '他ユーザーのメモ',
+        ]);
+
+        Carbon::setTestNow('2026-08-24 15:00:00');
+        Activity::create([
+            'customer_id' => $customer->id,
+            'user_id' => $user->id,
+            'rank' => 'C',
+            'action_at' => '2026-08-24 14:50:00',
+            'status' => 'コール',
+            'memo' => '昨日登録したメモ',
+        ]);
+
+        Carbon::setTestNow('2026-08-25 15:00:00');
+
+        $index = $this->actingAs($admin)->get('/opnavi/admin/user_management');
+        $index->assertOk();
+        $index->assertSee('href="'.route('admin.user-management.activities', $user).'"', false);
+
+        $response = $this->actingAs($admin)->get(route('admin.user-management.activities', $user));
+
+        $response->assertOk();
+        $response->assertSee('架電状況');
+        $response->assertSee('営業ユーザー');
+        $response->assertSee('sales-user@illuvia-inc.com');
+        $response->assertSee('合計架電数');
+        $response->assertSee('<strong>3</strong>', false);
+        $response->assertSee('本日の架電数');
+        $response->assertSee('<strong>2</strong>', false);
+        $response->assertSee('架電確認用事業者');
+        $response->assertSee('今日登録したメモ');
+        $response->assertSee('今日登録した別メモ');
+        $response->assertSee('昨日登録したメモ');
+        $response->assertSee('href="'.route('customers.show', $customer).'"', false);
+        $response->assertSee('target="_blank"', false);
+        $response->assertSee('class="mypage-today-row"', false);
+        $response->assertDontSee('他ユーザーのメモ');
     }
 
     public function test_user_invitation_creates_user_and_sends_mail(): void

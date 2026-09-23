@@ -56,8 +56,18 @@ class User extends Authenticatable
         return $this->hasMany(Customer::class, 'owner_id');
     }
 
+    public function salesCustomers()
+    {
+        return $this->hasMany(Customer::class, 'sales_owner_id');
+    }
+
     public function activities()
     {
         return $this->hasMany(Activity::class);
+    }
+
+    public function dailyCallResults()
+    {
+        return $this->hasMany(DailyCallResult::class);
     }
 }

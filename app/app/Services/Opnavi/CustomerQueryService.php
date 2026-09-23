@@ -2,6 +2,7 @@
 
 namespace App\Services\Opnavi;
 
+use App\Models\Activity;
 use App\Models\Customer;
 use App\Models\User;
 use App\Support\PhoneSearch;
@@ -13,11 +14,11 @@ use Illuminate\Http\Request;
 
 class CustomerQueryService
 {
-    public function paginate(Request $request, ?int $ownerId = null)
+    public function paginate(Request $request, ?int $scopeUserId = null, string $scopeColumn = 'owner_id')
     {
         $query = Customer::query()->with('owner');
 
-        $this->applyOwnerScope($query, $ownerId);
+        $this->applyUserScope($query, $scopeUserId, $scopeColumn);
 
         $this->applyFilters($query, $request);
 
@@ -33,26 +34,34 @@ class CustomerQueryService
         return User::where('is_active', true)->orderBy('id')->get();
     }
 
+    public function activeSalesUsers()
+    {
+        return User::where('is_active', true)
+            ->where('role', 'sales')
+            ->orderBy('id')
+            ->get();
+    }
+
     public function regions()
     {
         return Customer::query()->select('region')->distinct()->orderBy('region')->pluck('region');
     }
 
-    public function previousCustomer(Customer $customer, Request $request, ?int $ownerId = null): ?Customer
+    public function previousCustomer(Customer $customer, Request $request, ?int $scopeUserId = null, string $scopeColumn = 'owner_id'): ?Customer
     {
-        return $this->adjacentCustomer($customer, $request, -1, $ownerId);
+        return $this->adjacentCustomer($customer, $request, -1, $scopeUserId, $scopeColumn);
     }
 
-    public function nextCustomer(Customer $customer, Request $request, ?int $ownerId = null): ?Customer
+    public function nextCustomer(Customer $customer, Request $request, ?int $scopeUserId = null, string $scopeColumn = 'owner_id'): ?Customer
     {
-        return $this->adjacentCustomer($customer, $request, 1, $ownerId);
+        return $this->adjacentCustomer($customer, $request, 1, $scopeUserId, $scopeColumn);
     }
 
-    private function adjacentCustomer(Customer $customer, Request $request, int $offset, ?int $ownerId = null): ?Customer
+    private function adjacentCustomer(Customer $customer, Request $request, int $offset, ?int $scopeUserId = null, string $scopeColumn = 'owner_id'): ?Customer
     {
         $query = Customer::query()->select('opnavi_customers.id');
 
-        $this->applyOwnerScope($query, $ownerId);
+        $this->applyUserScope($query, $scopeUserId, $scopeColumn);
 
         $this->applyFilters($query, $request);
 
@@ -75,10 +84,10 @@ class CustomerQueryService
         return Customer::find($adjacentId);
     }
 
-    private function applyOwnerScope(Builder $query, ?int $ownerId): void
+    private function applyUserScope(Builder $query, ?int $scopeUserId, string $scopeColumn): void
     {
-        if ($ownerId !== null) {
-            $query->where('owner_id', $ownerId);
+        if ($scopeUserId !== null) {
+            $query->where($scopeColumn, $scopeUserId);
         }
     }
 
@@ -88,10 +97,18 @@ class CustomerQueryService
             $this->applyKeywordFilter($query, $keyword);
         }
 
-        foreach (['region', 'status', 'owner_id'] as $field) {
+        foreach (['region', 'owner_id'] as $field) {
             if ($request->filled($field)) {
                 $query->where($field, $request->input($field));
             }
+        }
+
+        if ($request->filled('rank') && in_array($request->input('rank'), Activity::RANKS, true)) {
+            $this->applyLatestActivityRankFilter($query, $request->input('rank'));
+        }
+
+        if (in_array($request->input('activity_contact_person'), ['filled', 'blank'], true)) {
+            $this->applyLatestActivityContactPersonFilter($query, $request->input('activity_contact_person'));
         }
 
         if ($request->filled('next_action_from')) {
@@ -113,6 +130,42 @@ class CustomerQueryService
         } elseif ($request->input('chip') === 'not_started') {
             $query->where('status', '未対応');
         }
+    }
+
+    private function applyLatestActivityRankFilter(Builder $query, string $rank): void
+    {
+        $query->whereExists(function ($subQuery) use ($rank) {
+            $subQuery->selectRaw('1')
+                ->from('opnavi_activities as latest_rank_activity')
+                ->whereColumn('latest_rank_activity.customer_id', 'opnavi_customers.id')
+                ->where('latest_rank_activity.rank', $rank)
+                ->whereRaw('latest_rank_activity.id = (
+                    select latest_activity.id
+                    from opnavi_activities as latest_activity
+                    where latest_activity.customer_id = opnavi_customers.id
+                    order by latest_activity.action_at desc, latest_activity.id desc
+                    limit 1
+                )');
+        });
+    }
+
+    private function applyLatestActivityContactPersonFilter(Builder $query, string $presence): void
+    {
+        $method = $presence === 'filled' ? 'whereExists' : 'whereNotExists';
+
+        $query->{$method}(function ($subQuery) {
+            $subQuery->selectRaw('1')
+                ->from('opnavi_activities as latest_contact_activity')
+                ->whereColumn('latest_contact_activity.customer_id', 'opnavi_customers.id')
+                ->whereRaw("trim(coalesce(latest_contact_activity.contact_person, '')) <> ''")
+                ->whereRaw('latest_contact_activity.id = (
+                    select latest_activity.id
+                    from opnavi_activities as latest_activity
+                    where latest_activity.customer_id = opnavi_customers.id
+                    order by latest_activity.action_at desc, latest_activity.id desc
+                    limit 1
+                )');
+        });
     }
 
     private function applyKeywordFilter(Builder $query, string $keyword): void

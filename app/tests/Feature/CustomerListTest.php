@@ -193,35 +193,126 @@ class CustomerListTest extends TestCase
         $response->assertDontSee('体験内容だけ一致');
     }
 
-    public function test_next_action_date_range_filters_with_status_and_keyword(): void
+    public function test_next_action_date_range_filters_with_rank_and_keyword(): void
     {
-        Customer::create($this->customerData([
+        $user = User::factory()->create(['name' => '砂澤', 'is_active' => true]);
+        $target = Customer::create($this->customerData([
             'business_name' => '期間内の対象顧客',
-            'status' => 'やり取り中',
             'sales_memo' => '再架電予定',
             'next_action_at' => '2026-08-20 10:00:00',
         ]));
-        Customer::create($this->customerData([
+        Activity::create([
+            'customer_id' => $target->id,
+            'action_at' => '2026-08-18 10:00:00',
+            'user_id' => $user->id,
+            'rank' => 'A',
+            'status' => 'コール',
+            'memo' => '対象履歴',
+        ]);
+
+        $outsideRange = Customer::create($this->customerData([
             'business_name' => '期間外の顧客',
-            'status' => 'やり取り中',
             'sales_memo' => '再架電予定',
             'next_action_at' => '2026-08-25 10:00:00',
             'address' => '埼玉県さいたま市2-2-2',
         ]));
-        Customer::create($this->customerData([
-            'business_name' => 'ステータス違い顧客',
-            'status' => '未対応',
+        Activity::create([
+            'customer_id' => $outsideRange->id,
+            'action_at' => '2026-08-18 10:00:00',
+            'user_id' => $user->id,
+            'rank' => 'A',
+            'status' => 'コール',
+            'memo' => '期間外履歴',
+        ]);
+
+        $differentRank = Customer::create($this->customerData([
+            'business_name' => 'Rank違い顧客',
             'sales_memo' => '再架電予定',
             'next_action_at' => '2026-08-20 11:00:00',
             'address' => '埼玉県さいたま市3-3-3',
         ]));
+        Activity::create([
+            'customer_id' => $differentRank->id,
+            'action_at' => '2026-08-18 10:00:00',
+            'user_id' => $user->id,
+            'rank' => 'A',
+            'status' => 'コール',
+            'memo' => '古いRank履歴',
+        ]);
+        Activity::create([
+            'customer_id' => $differentRank->id,
+            'action_at' => '2026-08-19 10:00:00',
+            'user_id' => $user->id,
+            'rank' => 'B',
+            'status' => '対応',
+            'memo' => '最新Rank履歴',
+        ]);
 
-        $response = $this->get('/opnavi/admin/customers?next_action_from=2026-08-19&next_action_to=2026-08-21&status=やり取り中&keyword='.urlencode('再架電'));
+        $response = $this->get('/opnavi/admin/customers?next_action_from=2026-08-19&next_action_to=2026-08-21&rank=A&keyword='.urlencode('再架電'));
 
         $response->assertOk();
         $response->assertSee('期間内の対象顧客');
         $response->assertDontSee('期間外の顧客');
-        $response->assertDontSee('ステータス違い顧客');
+        $response->assertDontSee('Rank違い顧客');
+    }
+
+    public function test_customers_can_be_filtered_by_latest_activity_contact_person_presence(): void
+    {
+        $user = User::factory()->create(['name' => '砂澤', 'is_active' => true]);
+        $filled = Customer::create($this->customerData([
+            'business_name' => '最新履歴担当者あり',
+        ]));
+        Activity::create([
+            'customer_id' => $filled->id,
+            'action_at' => '2026-08-18 10:00:00',
+            'user_id' => $user->id,
+            'rank' => 'A',
+            'contact_person' => '山田',
+            'status' => 'コール',
+            'memo' => '担当者あり',
+        ]);
+
+        $blank = Customer::create($this->customerData([
+            'business_name' => '最新履歴担当者なし',
+            'address' => '埼玉県さいたま市2-2-2',
+        ]));
+        Activity::create([
+            'customer_id' => $blank->id,
+            'action_at' => '2026-08-18 10:00:00',
+            'user_id' => $user->id,
+            'rank' => 'A',
+            'contact_person' => '佐藤',
+            'status' => 'コール',
+            'memo' => '古い担当者あり',
+        ]);
+        Activity::create([
+            'customer_id' => $blank->id,
+            'action_at' => '2026-08-19 10:00:00',
+            'user_id' => $user->id,
+            'rank' => 'B',
+            'contact_person' => '',
+            'status' => '対応',
+            'memo' => '最新担当者なし',
+        ]);
+
+        Customer::create($this->customerData([
+            'business_name' => '履歴なし顧客',
+            'address' => '埼玉県さいたま市3-3-3',
+        ]));
+
+        $response = $this->get('/opnavi/admin/customers?activity_contact_person=filled');
+
+        $response->assertOk();
+        $response->assertSee('最新履歴担当者あり');
+        $response->assertDontSee('最新履歴担当者なし');
+        $response->assertDontSee('履歴なし顧客');
+
+        $response = $this->get('/opnavi/admin/customers?activity_contact_person=blank');
+
+        $response->assertOk();
+        $response->assertDontSee('最新履歴担当者あり');
+        $response->assertSee('最新履歴担当者なし');
+        $response->assertSee('履歴なし顧客');
     }
 
     public function test_customer_search_form_hides_region_filter_and_chip_buttons(): void
@@ -249,28 +340,26 @@ class CustomerListTest extends TestCase
         $response->assertDontSee('chip=overdue', false);
         $response->assertDontSee('name="sort_by"', false);
         $response->assertDontSee('name="sort_order"', false);
+        $response->assertDontSee('name="status"', false);
+        $response->assertSee('Rank');
+        $response->assertSee('name="rank"', false);
+        $response->assertSee('相手担当者');
+        $response->assertSee('name="activity_contact_person"', false);
+        $response->assertSee('<option value="filled"', false);
+        $response->assertSee('<option value="blank"', false);
         $response->assertSee('name="per_page"', false);
         $response->assertSee('aria-label="表示件数"', false);
     }
 
-    public function test_customer_search_form_shows_added_statuses(): void
+    public function test_customer_search_form_shows_rank_options(): void
     {
         Customer::create($this->customerData());
 
         $response = $this->get('/opnavi/admin/customers');
 
         $response->assertOk();
-        foreach ([
-            '見込み（アポイント時）',
-            '見込み（アポイント後）',
-            '追客',
-            'メール',
-            '受付ブロック',
-            '担当不在',
-            '現アナ',
-            'NG',
-        ] as $status) {
-            $response->assertSee('<option value="'.$status.'"', false);
+        foreach (Activity::RANKS as $rank) {
+            $response->assertSee('<option value="'.$rank.'"', false);
         }
     }
 
@@ -515,7 +604,7 @@ class CustomerListTest extends TestCase
         ]);
 
         $response->assertRedirect($redirectTo);
-        $response->assertSessionHas('status', '1件の担当者を荒に更新しました');
+        $response->assertSessionHas('status', '1件のコール担当を荒に更新しました');
         $this->assertDatabaseHas('opnavi_customers', [
             'id' => $selectedCustomer->id,
             'owner_id' => $owner->id,
@@ -579,45 +668,81 @@ class CustomerListTest extends TestCase
     {
         $user = $this->salesUser();
         $this->actingAs($user);
-        $customer = Customer::create($this->customerData(['owner_id' => $user->id]));
+        $customer = Customer::create($this->customerData(['sales_owner_id' => $user->id]));
 
         $response = $this->get('/opnavi/user/customers');
 
         $response->assertOk();
         $response->assertSee('顧客一覧');
         $response->assertDontSee('CSVインポート');
-        $response->assertDontSee('一括担当者設定');
+        $response->assertDontSee('一括コール担当設定');
         $response->assertDontSee('営業ダッシュボード');
         $response->assertSee(route('user.customers.show', $customer), false);
     }
 
-    public function test_user_customer_list_shows_only_owned_customers(): void
+    public function test_sales_user_customer_list_shows_only_sales_owned_customers(): void
     {
         $user = $this->salesUser();
         $otherUser = $this->salesUser();
         $this->actingAs($user);
 
         Customer::create($this->customerData([
-            'business_name' => '自分の担当顧客',
+            'business_name' => '自分の営業担当顧客',
+            'owner_id' => $otherUser->id,
+            'sales_owner_id' => $user->id,
+        ]));
+        Customer::create($this->customerData([
+            'business_name' => 'コール担当だけ自分の顧客',
             'owner_id' => $user->id,
+            'sales_owner_id' => $otherUser->id,
+            'address' => '埼玉県さいたま市4-4-4',
         ]));
         Customer::create($this->customerData([
             'business_name' => '他人の担当顧客',
             'owner_id' => $otherUser->id,
+            'sales_owner_id' => $otherUser->id,
             'address' => '埼玉県さいたま市別住所1-2-3',
         ]));
         Customer::create($this->customerData([
             'business_name' => '未担当顧客',
             'owner_id' => null,
+            'sales_owner_id' => null,
             'address' => '埼玉県さいたま市未担当1-2-3',
         ]));
 
         $response = $this->get('/opnavi/user/customers');
 
         $response->assertOk();
-        $response->assertSee('自分の担当顧客');
+        $response->assertSee('自分の営業担当顧客');
+        $response->assertDontSee('コール担当だけ自分の顧客');
         $response->assertDontSee('他人の担当顧客');
         $response->assertDontSee('未担当顧客');
+    }
+
+    public function test_appointment_user_customer_list_shows_only_call_owned_customers(): void
+    {
+        $user = $this->appointmentUser();
+        $otherUser = $this->appointmentUser();
+        $salesOwner = $this->salesUser();
+        $this->actingAs($user);
+
+        Customer::create($this->customerData([
+            'business_name' => '自分のコール担当顧客',
+            'owner_id' => $user->id,
+            'sales_owner_id' => $salesOwner->id,
+        ]));
+        Customer::create($this->customerData([
+            'business_name' => '営業担当だけ自分ではない顧客',
+            'owner_id' => $otherUser->id,
+            'sales_owner_id' => $salesOwner->id,
+            'address' => '埼玉県さいたま市別住所1-2-3',
+        ]));
+
+        $response = $this->get('/opnavi/user/customers');
+
+        $response->assertOk();
+        $response->assertSee('自分のコール担当顧客');
+        $response->assertDontSee('営業担当だけ自分ではない顧客');
     }
 
     public function test_user_customer_brand_is_not_clickable(): void
@@ -635,7 +760,7 @@ class CustomerListTest extends TestCase
     {
         $user = $this->salesUser();
         $this->actingAs($user);
-        $customer = Customer::create($this->customerData(['owner_id' => $user->id]));
+        $customer = Customer::create($this->customerData(['sales_owner_id' => $user->id]));
 
         $response = $this->get('/opnavi/user/customers/'.$customer->id);
 
@@ -653,13 +778,16 @@ class CustomerListTest extends TestCase
     {
         $user = $this->salesUser();
         $this->actingAs($user);
-        $customer = Customer::create($this->customerData(['owner_id' => $user->id]));
+        $customer = Customer::create($this->customerData(['sales_owner_id' => $user->id]));
 
         $response = $this->get('/opnavi/user/customers/'.$customer->id);
 
         $response->assertOk();
         $response->assertSee('<input type="hidden" name="user_id" value="'.$user->id.'">', false);
-        $response->assertSee('<input type="text" value="'.$user->name.'" disabled>', false);
+        $response->assertSee('Rank');
+        $response->assertSee('<select name="rank" required>', false);
+        $response->assertSee('<option value="A">A</option>', false);
+        $response->assertSee('<option value="H">H</option>', false);
         $response->assertDontSee('<select name="user_id" required>', false);
     }
 
@@ -667,9 +795,11 @@ class CustomerListTest extends TestCase
     {
         $owner = $this->salesUser();
         $this->actingAs($owner);
+        $this->travelTo('2026-07-30 10:00:00');
         $customer = Customer::create($this->customerData([
             'business_name' => '変更前事業者',
-            'owner_id' => $owner->id,
+            'owner_id' => null,
+            'sales_owner_id' => $owner->id,
             'contact_phone' => '09011112222',
             'next_action_at' => null,
             'sales_memo' => '変更前メモ',
@@ -689,7 +819,8 @@ class CustomerListTest extends TestCase
         $customer->refresh();
 
         $this->assertSame('変更前事業者', $customer->business_name);
-        $this->assertEquals($owner->id, $customer->owner_id);
+        $this->assertNull($customer->owner_id);
+        $this->assertEquals($owner->id, $customer->sales_owner_id);
         $this->assertSame('09099998888', $customer->contact_phone);
         $this->assertSame('2026-07-31 13:45', $customer->next_action_at->format('Y-m-d H:i'));
         $this->assertSame('ユーザー画面で更新', $customer->sales_memo);
@@ -700,7 +831,7 @@ class CustomerListTest extends TestCase
         $user = $this->salesUser();
         $otherUser = $this->salesUser();
         $this->actingAs($user);
-        $customer = Customer::create($this->customerData(['owner_id' => $otherUser->id]));
+        $customer = Customer::create($this->customerData(['sales_owner_id' => $otherUser->id]));
 
         $response = $this->get('/opnavi/user/customers/'.$customer->id);
 
@@ -714,7 +845,7 @@ class CustomerListTest extends TestCase
         $otherUser = $this->salesUser();
         $this->actingAs($user);
         $customer = Customer::create($this->customerData([
-            'owner_id' => $otherUser->id,
+            'sales_owner_id' => $otherUser->id,
             'sales_memo' => '変更前メモ',
         ]));
 
@@ -734,12 +865,13 @@ class CustomerListTest extends TestCase
         $user = $this->salesUser();
         $otherUser = $this->salesUser();
         $this->actingAs($user);
-        $customer = Customer::create($this->customerData(['owner_id' => $otherUser->id]));
+        $customer = Customer::create($this->customerData(['sales_owner_id' => $otherUser->id]));
 
         $response = $this->post('/opnavi/user/customers/'.$customer->id.'/activities', [
             'action_at' => '2026-07-20 10:30:00',
             'user_id' => $user->id,
-            'status' => '商談中',
+            'rank' => 'A',
+            'status' => 'コール',
             'memo' => '登録されてはいけない履歴',
         ]);
 
@@ -755,15 +887,18 @@ class CustomerListTest extends TestCase
     {
         $user = $this->salesUser();
         $otherUser = $this->salesUser();
+        $salesOwner = $this->salesUser();
         $this->actingAs($user);
-        $customer = Customer::create($this->customerData(['owner_id' => $user->id]));
+        $customer = Customer::create($this->customerData(['sales_owner_id' => $user->id]));
 
         $response = $this->post('/opnavi/user/customers/'.$customer->id.'/activities', [
             'action_at' => '2026-07-20 10:30:00',
             'user_id' => $otherUser->id,
+            'rank' => 'C',
             'contact_person' => '山田',
-            'contact_status' => '担当者',
-            'status' => '商談中',
+            'contact_status' => '担当（男）',
+            'status' => 'APO',
+            'sales_owner_id' => $salesOwner->id,
             'memo' => 'ログインユーザーで登録',
         ]);
 
@@ -771,8 +906,10 @@ class CustomerListTest extends TestCase
         $this->assertDatabaseHas('opnavi_activities', [
             'customer_id' => $customer->id,
             'user_id' => $user->id,
+            'rank' => 'C',
             'memo' => 'ログインユーザーで登録',
         ]);
+        $this->assertSame($salesOwner->id, (int) $customer->refresh()->sales_owner_id);
         $this->assertDatabaseMissing('opnavi_activities', [
             'customer_id' => $customer->id,
             'user_id' => $otherUser->id,
@@ -785,23 +922,25 @@ class CustomerListTest extends TestCase
         $user = $this->salesUser();
         $otherUser = $this->salesUser();
         $this->actingAs($user);
-        $customer = Customer::create($this->customerData(['owner_id' => $user->id]));
+        $customer = Customer::create($this->customerData(['sales_owner_id' => $user->id]));
         $activity = Activity::create([
             'customer_id' => $customer->id,
             'action_at' => '2026-07-20 10:30:00',
             'user_id' => $otherUser->id,
+            'rank' => 'A',
             'contact_person' => '山田',
-            'contact_status' => '担当者',
-            'status' => '商談中',
+            'contact_status' => '担当（男）',
+            'status' => 'コール',
             'memo' => '更新前メモ',
         ]);
 
         $response = $this->patch('/opnavi/user/customers/'.$customer->id.'/activities/'.$activity->id, [
             'action_at' => '2026-07-21 11:00:00',
             'user_id' => $otherUser->id,
+            'rank' => 'D',
             'contact_person' => '佐藤',
-            'contact_status' => '代表',
-            'status' => '契約',
+            'contact_status' => '社長',
+            'status' => '初訪',
             'memo' => 'ログインユーザーで更新',
         ]);
 
@@ -809,6 +948,7 @@ class CustomerListTest extends TestCase
         $this->assertDatabaseHas('opnavi_activities', [
             'id' => $activity->id,
             'user_id' => $user->id,
+            'rank' => 'D',
             'memo' => 'ログインユーザーで更新',
         ]);
     }
@@ -844,6 +984,15 @@ class CustomerListTest extends TestCase
     {
         return User::factory()->create([
             'role' => 'sales',
+            'is_active' => true,
+            'must_change_password' => false,
+        ]);
+    }
+
+    private function appointmentUser(): User
+    {
+        return User::factory()->create([
+            'role' => 'appointment',
             'is_active' => true,
             'must_change_password' => false,
         ]);

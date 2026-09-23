@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Mail\UserInvitationMail;
+use App\Models\Activity;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +19,32 @@ class UserManagementController extends Controller
     {
         return view('user_management.index', [
             'users' => User::orderBy('id')->get(),
+        ]);
+    }
+
+    public function activities(User $user)
+    {
+        $activities = Activity::query()
+            ->with('customer')
+            ->where('user_id', $user->id)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->get();
+
+        $totalActivityCount = Activity::query()
+            ->where('user_id', $user->id)
+            ->count();
+
+        $todayActivityCount = Activity::query()
+            ->where('user_id', $user->id)
+            ->whereBetween('created_at', [now()->startOfDay(), now()->endOfDay()])
+            ->count();
+
+        return view('user_management.activities', [
+            'user' => $user,
+            'activities' => $activities,
+            'totalActivityCount' => $totalActivityCount,
+            'todayActivityCount' => $todayActivityCount,
         ]);
     }
 

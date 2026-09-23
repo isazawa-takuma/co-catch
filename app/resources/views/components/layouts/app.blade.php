@@ -43,6 +43,9 @@
                         <details class="sidebar-user__menu">
                             <summary>{{ auth()->user()->name }}</summary>
                             <div class="sidebar-user__actions">
+                                @if ($isUserScreen)
+                                    <a href="{{ route('mypage.show') }}">マイページ</a>
+                                @endif
                                 <a href="{{ route('password.edit') }}">パスワード変更</a>
                                 <form method="post" action="{{ route('logout') }}" data-confirm-submit="ログアウトしますか？">
                                     @csrf

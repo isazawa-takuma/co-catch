@@ -15,10 +15,17 @@ class UserCustomerUpdateRequest extends FormRequest
     {
         return [
             'contact_phone' => ['nullable', 'string', 'max:255'],
-            'next_action_at' => ['nullable', 'date'],
+            'next_action_at' => ['nullable', 'date', 'after_or_equal:today'],
             'next_action_alert_enabled' => ['nullable', 'boolean'],
             'sales_memo' => ['nullable', 'string'],
             'redirect_to' => ['nullable', 'string'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'next_action_at.after_or_equal' => '次回アクション日は本日以降の日付を指定してください。',
         ];
     }
 }

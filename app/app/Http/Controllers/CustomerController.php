@@ -9,6 +9,7 @@ use App\Http\Requests\CustomerUpdateRequest;
 use App\Http\Requests\UserCustomerUpdateRequest;
 use App\Models\Activity;
 use App\Models\Customer;
+use App\Models\User;
 use App\Services\Opnavi\CustomerActivityService;
 use App\Services\Opnavi\CustomerImportService;
 use App\Services\Opnavi\CustomerQueryService;
@@ -34,10 +35,14 @@ class CustomerController extends Controller
 
     public function userIndex(Request $request)
     {
-        return $this->listView($request, $request->user()->id);
+        return $this->listView(
+            $request,
+            $request->user()->id,
+            $this->userCustomerScopeColumn($request->user())
+        );
     }
 
-    private function listView(Request $request, ?int $ownerId = null)
+    private function listView(Request $request, ?int $scopeUserId = null, string $scopeColumn = 'owner_id')
     {
         $filters = array_merge($request->all(), [
             'sort_by' => $this->queryService->sortBy($request),
@@ -45,9 +50,9 @@ class CustomerController extends Controller
         ]);
 
         return view('customers.index', [
-            'customers' => $this->queryService->paginate($request, $ownerId),
+            'customers' => $this->queryService->paginate($request, $scopeUserId, $scopeColumn),
             'users' => $this->queryService->activeUsers(),
-            'statuses' => Customer::STATUSES,
+            'ranks' => Activity::RANKS,
             'filters' => $filters,
             'regions' => $this->queryService->regions(),
         ]);
@@ -64,22 +69,29 @@ class CustomerController extends Controller
             return $response;
         }
 
-        return $this->detailView($request, $customer, $request->user()->id);
+        return $this->detailView(
+            $request,
+            $customer,
+            $request->user()->id,
+            $this->userCustomerScopeColumn($request->user())
+        );
     }
 
-    private function detailView(Request $request, Customer $customer, ?int $ownerId = null)
+    private function detailView(Request $request, Customer $customer, ?int $scopeUserId = null, string $scopeColumn = 'owner_id')
     {
-        $customer->load(['owner', 'otaLinks', 'activities.user']);
+        $customer->load(['owner', 'salesOwner', 'otaLinks', 'activities.user']);
 
         $view = $request->boolean('modal') && $request->ajax() ? 'customers._detail' : 'customers.show';
 
         return view($view, [
             'customer' => $customer,
             'users' => $this->queryService->activeUsers(),
+            'salesUsers' => $this->queryService->activeSalesUsers(),
             'statuses' => Customer::STATUSES,
+            'activityStatuses' => Activity::STATUSES,
             'contactStatuses' => Activity::CONTACT_STATUSES,
-            'previousCustomer' => $this->queryService->previousCustomer($customer, $request, $ownerId),
-            'nextCustomer' => $this->queryService->nextCustomer($customer, $request, $ownerId),
+            'previousCustomer' => $this->queryService->previousCustomer($customer, $request, $scopeUserId, $scopeColumn),
+            'nextCustomer' => $this->queryService->nextCustomer($customer, $request, $scopeUserId, $scopeColumn),
         ]);
     }
 
@@ -125,7 +137,7 @@ class CustomerController extends Controller
             ->whereBetween('next_action_at', [$alertWindowStart, $alertWindowEnd]);
 
         if (in_array($user->role, ['appointment', 'sales'], true)) {
-            $query->where('owner_id', $user->id);
+            $query->where($this->userCustomerScopeColumn($user), $user->id);
         } elseif ($user->role !== 'admin') {
             return response()->json(['alerts' => []]);
         }
@@ -155,7 +167,7 @@ class CustomerController extends Controller
         $ownerName = $this->queryService->activeUsers()->firstWhere('id', (int) ($data['owner_id'] ?? 0))?->name ?? '未担当';
 
         return $this->redirectToList($request)
-            ->with('status', $updatedCount.'件の担当者を'.$ownerName.'に更新しました');
+            ->with('status', $updatedCount.'件のコール担当を'.$ownerName.'に更新しました');
     }
 
     public function storeActivity(ActivitySaveRequest $request, Customer $customer)
@@ -271,7 +283,7 @@ class CustomerController extends Controller
 
     private function denyUserCustomerAccess(Request $request, Customer $customer)
     {
-        if ((int) $customer->owner_id === (int) $request->user()->id) {
+        if ((int) $customer->{$this->userCustomerScopeColumn($request->user())} === (int) $request->user()->id) {
             return null;
         }
 
@@ -282,5 +294,10 @@ class CustomerController extends Controller
         }
 
         return redirect()->route('user.customers.index')->with('error', $message);
+    }
+
+    private function userCustomerScopeColumn(User $user): string
+    {
+        return $user->role === 'sales' ? 'sales_owner_id' : 'owner_id';
     }
 }

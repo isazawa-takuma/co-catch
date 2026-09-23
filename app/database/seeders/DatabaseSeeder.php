@@ -39,6 +39,20 @@ class DatabaseSeeder extends Seeder
                 'last_name' => '田中',
                 'first_name' => '太郎',
                 'password' => Hash::make('password'),
+                'role' => 'appointment',
+                'is_active' => true,
+                'must_change_password' => false,
+                'initial_password_expires_at' => null,
+            ]
+        );
+
+        User::updateOrCreate(
+            ['email' => 'sales-test@example.local'],
+            [
+                'name' => 'テスト営業',
+                'last_name' => 'テスト',
+                'first_name' => '営業',
+                'password' => Hash::make('password'),
                 'role' => 'sales',
                 'is_active' => true,
                 'must_change_password' => false,

@@ -126,13 +126,21 @@
                     </div>
                 </div>
             </div>
-            <label>
-                ステータス
-                <select name="status">
+            <label class="filters__compact">
+                Rank
+                <select name="rank">
                     <option value="">すべて</option>
-                    @foreach ($statuses as $status)
-                        <option value="{{ $status }}" @selected(($filters['status'] ?? '') === $status)>{{ $status }}</option>
+                    @foreach ($ranks as $rank)
+                        <option value="{{ $rank }}" @selected(($filters['rank'] ?? '') === $rank)>{{ $rank }}</option>
                     @endforeach
+                </select>
+            </label>
+            <label class="filters__compact">
+                相手担当者
+                <select name="activity_contact_person">
+                    <option value="">すべて</option>
+                    <option value="filled" @selected(($filters['activity_contact_person'] ?? '') === 'filled')>入力あり</option>
+                    <option value="blank" @selected(($filters['activity_contact_person'] ?? '') === 'blank')>未入力</option>
                 </select>
             </label>
             <label class="filters__keyword">
@@ -184,7 +192,7 @@
                         @method('patch')
                         <input type="hidden" name="redirect_to" value="{{ url()->full() }}">
                         <label>
-                            一括担当者設定
+                            一括コール担当設定
                             <select name="owner_id">
                                 <option value="">未担当</option>
                                 @foreach ($users as $user)
@@ -217,7 +225,7 @@
                                 </th>
                                 <th>リクエスト予約</th>
                                 <th class="status-col">ステータス</th>
-                                <th class="owner-col">担当者</th>
+                                <th class="owner-col">コール担当</th>
                                 <th @class(['sortable-header', 'is-sorted' => $activeHeaderSortBy === 'last_action_at'])>
                                     <a class="sortable-header__link" href="{{ $sortUrl('last_action_at') }}" data-customer-sort-link aria-label="最終アクションを{{ $nextSortOrder('last_action_at') === 'asc' ? '昇順' : '降順' }}で並び替え">
                                         <span>最終アクション</span>
