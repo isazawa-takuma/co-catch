@@ -136,6 +136,56 @@ class CustomerActivityTest extends TestCase
         $this->assertSame('更新後メモ', $customer->last_action_summary);
     }
 
+    public function test_activity_can_be_updated_to_apo_and_assign_sales_owner(): void
+    {
+        $user = User::factory()->create(['name' => '砂澤', 'is_active' => true]);
+        $salesOwner = User::factory()->create(['name' => 'テスト営業', 'role' => 'sales', 'is_active' => true]);
+        $customer = Customer::create($this->customerData([
+            'status' => 'コール',
+            'sales_owner_id' => null,
+        ]));
+        $activity = Activity::create([
+            'customer_id' => $customer->id,
+            'action_at' => '2026-07-20 10:30:00',
+            'user_id' => $user->id,
+            'rank' => 'A',
+            'contact_person' => '山田',
+            'contact_status' => '担当（男）',
+            'status' => 'コール',
+            'memo' => '更新前メモ',
+        ]);
+
+        $detail = $this->get('/opnavi/admin/customers/'.$customer->id);
+
+        $detail->assertOk();
+        $detail->assertSee('id="activity-update-'.$activity->id.'"', false);
+        $detail->assertSee('data-activity-form', false);
+        $detail->assertSee('data-activity-status-select', false);
+        $detail->assertSee('data-activity-sales-owner-input', false);
+
+        $response = $this->patch('/opnavi/admin/customers/'.$customer->id.'/activities/'.$activity->id, [
+            'action_at' => '2026-07-20 10:30:00',
+            'user_id' => $user->id,
+            'rank' => 'A',
+            'contact_person' => '山田',
+            'contact_status' => '担当（男）',
+            'status' => 'APO',
+            'sales_owner_id' => $salesOwner->id,
+            'memo' => 'APOへ更新しました',
+        ]);
+
+        $response->assertRedirect('/opnavi/admin/customers/'.$customer->id);
+        $response->assertSessionHas('status', '履歴を更新しました');
+        $this->assertDatabaseHas('opnavi_activities', [
+            'id' => $activity->id,
+            'status' => 'APO',
+            'memo' => 'APOへ更新しました',
+        ]);
+        $customer->refresh();
+        $this->assertSame('APO', $customer->status);
+        $this->assertSame($salesOwner->id, (int) $customer->sales_owner_id);
+    }
+
     public function test_activities_with_same_action_time_are_shown_newest_first(): void
     {
         $user = User::factory()->create(['name' => '砂澤', 'is_active' => true]);

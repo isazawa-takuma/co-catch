@@ -1541,41 +1541,51 @@ function initializeDrawerForms(scope) {
 }
 
 function initializeSalesOwnerPrompt(scope) {
-    scope.querySelectorAll('[data-activity-form]').forEach((form) => {
-        if (form.dataset.salesOwnerPromptBound === 'true') {
+    scope.querySelectorAll('.activity-section').forEach((section) => {
+        if (section.dataset.salesOwnerPromptBound === 'true') {
             return;
         }
 
-        const section = form.closest('.activity-section');
-        const modal = section?.querySelector('[data-sales-owner-modal]');
-        const statusSelect = form.querySelector('[data-activity-status-select]');
-        const salesOwnerInput = form.querySelector('[data-activity-sales-owner-input]');
+        const modal = section.querySelector('[data-sales-owner-modal]');
         const salesOwnerSelect = modal?.querySelector('[data-sales-owner-select]');
         const confirmButton = modal?.querySelector('[data-sales-owner-confirm]');
+        const forms = Array.from(section.querySelectorAll('[data-activity-form]'));
 
-        if (! modal || ! statusSelect || ! salesOwnerInput || ! salesOwnerSelect || ! confirmButton) {
+        if (! modal || ! salesOwnerSelect || ! confirmButton || forms.length === 0) {
             return;
         }
 
-        form.dataset.salesOwnerPromptBound = 'true';
+        section.dataset.salesOwnerPromptBound = 'true';
+        let pendingForm = null;
 
-        form.addEventListener('submit', (event) => {
-            if (form.dataset.salesOwnerPromptConfirmed === 'true') {
-                delete form.dataset.salesOwnerPromptConfirmed;
+        forms.forEach((form) => {
+            const statusSelect = form.querySelector('[data-activity-status-select]');
+            const salesOwnerInput = form.querySelector('[data-activity-sales-owner-input]');
+
+            if (! statusSelect || ! salesOwnerInput) {
                 return;
             }
 
-            if (statusSelect.value !== 'APO' || salesOwnerInput.value) {
-                return;
-            }
+            form.addEventListener('submit', (event) => {
+                if (form.dataset.salesOwnerPromptConfirmed === 'true') {
+                    delete form.dataset.salesOwnerPromptConfirmed;
+                    return;
+                }
 
-            event.preventDefault();
-            event.stopImmediatePropagation();
-            openSalesOwnerModal(modal, salesOwnerSelect);
+                if (statusSelect.value !== 'APO' || salesOwnerInput.value) {
+                    return;
+                }
+
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                pendingForm = form;
+                openSalesOwnerModal(modal, salesOwnerSelect);
+            });
         });
 
         modal.querySelectorAll('[data-sales-owner-cancel]').forEach((button) => {
             button.addEventListener('click', () => {
+                pendingForm = null;
                 closeSalesOwnerModal(modal);
             });
         });
@@ -1586,14 +1596,28 @@ function initializeSalesOwnerPrompt(scope) {
                 return;
             }
 
+            if (! pendingForm) {
+                closeSalesOwnerModal(modal);
+                return;
+            }
+
+            const salesOwnerInput = pendingForm.querySelector('[data-activity-sales-owner-input]');
+            if (! salesOwnerInput) {
+                pendingForm = null;
+                closeSalesOwnerModal(modal);
+                return;
+            }
+
             salesOwnerInput.value = salesOwnerSelect.value;
             closeSalesOwnerModal(modal);
-            form.dataset.salesOwnerPromptConfirmed = 'true';
-            form.requestSubmit();
+            pendingForm.dataset.salesOwnerPromptConfirmed = 'true';
+            pendingForm.requestSubmit();
+            pendingForm = null;
         });
 
         modal.addEventListener('keydown', (event) => {
             if (event.key === 'Escape') {
+                pendingForm = null;
                 closeSalesOwnerModal(modal);
             }
         });

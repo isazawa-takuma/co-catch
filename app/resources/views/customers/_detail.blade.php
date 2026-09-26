@@ -430,7 +430,7 @@
                         </span>
                     </span>
                 </button>
-                <form id="activity-update-{{ $activity->id }}" method="post" action="{{ route($activityUpdateRoute, [$customer, $activity]) }}">
+                <form id="activity-update-{{ $activity->id }}" method="post" action="{{ route($activityUpdateRoute, [$customer, $activity]) }}" data-activity-form>
                     @csrf
                     @method('patch')
                     @if (request()->boolean('modal'))
@@ -438,7 +438,7 @@
                     @endif
                     <input type="hidden" name="action_at" value="{{ $activity->action_at->format('Y-m-d\TH:i') }}">
                     <input type="hidden" name="user_id" value="{{ $isUserScreen ? auth()->id() : $activity->user_id }}">
-                    <input type="hidden" name="sales_owner_id" value="{{ $customer->sales_owner_id }}">
+                    <input type="hidden" name="sales_owner_id" value="{{ $customer->sales_owner_id }}" data-activity-sales-owner-input>
                     <div class="activity-item__summary">
                         <div class="activity-summary-field activity-summary-field--readonly">
                             <span>日時</span>
@@ -467,7 +467,7 @@
                         </label>
                         <label class="activity-summary-field">
                             <span>ステータス</span>
-                            <select name="status" required>
+                            <select name="status" required data-activity-status-select>
                                 @if ($activity->status && ! in_array($activity->status, $activityStatuses, true))
                                     <option value="{{ $activity->status }}" selected>{{ $activity->status }}（現在値）</option>
                                 @endif

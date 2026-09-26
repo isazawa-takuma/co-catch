@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Activity;
 use App\Models\Customer;
+use App\Models\DailyCallResult;
 use App\Models\User;
 use App\Mail\UserInvitationMail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -124,7 +125,7 @@ class UserManagementTest extends TestCase
             'user_id' => $user->id,
             'rank' => 'B',
             'action_at' => '2026-08-24 14:50:00',
-            'status' => 'コール',
+            'status' => 'メール',
             'memo' => '今日登録した別メモ',
         ]);
         Activity::create([
@@ -146,6 +147,26 @@ class UserManagementTest extends TestCase
             'memo' => '昨日登録したメモ',
         ]);
 
+        DailyCallResult::create([
+            'user_id' => $user->id,
+            'result_date' => '2026-08-24',
+            'total_count' => 7,
+            'status_counts' => [
+                'コール' => 4,
+                'メール' => 3,
+            ],
+            'confirmed_at' => '2026-08-24 18:00:00',
+        ]);
+        DailyCallResult::create([
+            'user_id' => $otherUser->id,
+            'result_date' => '2026-08-24',
+            'total_count' => 99,
+            'status_counts' => [
+                '他ユーザーのステータス' => 99,
+            ],
+            'confirmed_at' => '2026-08-24 18:00:00',
+        ]);
+
         Carbon::setTestNow('2026-08-25 15:00:00');
 
         $index = $this->actingAs($admin)->get('/opnavi/admin/user_management');
@@ -158,18 +179,36 @@ class UserManagementTest extends TestCase
         $response->assertSee('架電状況');
         $response->assertSee('営業ユーザー');
         $response->assertSee('sales-user@illuvia-inc.com');
-        $response->assertSee('合計架電数');
-        $response->assertSee('<strong>3</strong>', false);
+        $response->assertSee('本日の成績');
         $response->assertSee('本日の架電数');
         $response->assertSee('<strong>2</strong>', false);
-        $response->assertSee('架電確認用事業者');
-        $response->assertSee('今日登録したメモ');
-        $response->assertSee('今日登録した別メモ');
-        $response->assertSee('昨日登録したメモ');
-        $response->assertSee('href="'.route('customers.show', $customer).'"', false);
-        $response->assertSee('target="_blank"', false);
-        $response->assertSee('class="mypage-today-row"', false);
-        $response->assertDontSee('他ユーザーのメモ');
+        $response->assertSeeInOrder(['コール', 'メール']);
+        $response->assertSee('data-mypage-refresh', false);
+        $response->assertDontSee('本日の成績を確定');
+        $response->assertSee('日付ごとの成績');
+        $response->assertSee('2026/08/24');
+        $response->assertSee('<td>7</td>', false);
+        $response->assertDontSee('合計架電数');
+        $response->assertDontSee('架電確認用事業者');
+        $response->assertDontSee('今日登録したメモ');
+        $response->assertDontSee('他ユーザーのステータス');
+        $response->assertDontSee('<td>99</td>', false);
+    }
+
+    public function test_admin_user_activity_status_validates_the_result_date_range(): void
+    {
+        $admin = $this->adminUser();
+        $user = User::factory()->create([
+            'role' => 'sales',
+        ]);
+
+        $response = $this->actingAs($admin)->get(route('admin.user-management.activities', [
+            'user' => $user,
+            'result_from' => '2026-08-25',
+            'result_to' => '2026-08-24',
+        ]));
+
+        $response->assertSessionHasErrors('result_to');
     }
 
     public function test_user_invitation_creates_user_and_sends_mail(): void

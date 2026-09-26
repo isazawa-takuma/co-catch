@@ -1,0 +1,346 @@
+<x-layouts.app title="オペナビ一覧">
+    @php
+        $isUserScreen = request()->routeIs('user.*');
+        $indexRoute = $isUserScreen ? 'user.customers.index' : 'customers.index';
+        $showRoute = $isUserScreen ? 'user.customers.show' : 'customers.show';
+        $currentSortBy = $filters['sort_by'] ?? 'next_action_at';
+        $currentSortOrder = $filters['sort_order'] ?? 'asc';
+        $activeHeaderSortBy = request()->filled('sort_by') ? $currentSortBy : null;
+        $nextSortOrder = fn (string $sortBy) => $activeHeaderSortBy === $sortBy && $currentSortOrder === 'asc' ? 'desc' : 'asc';
+        $nextSortUrlParams = fn (string $sortBy) => $activeHeaderSortBy === $sortBy && $currentSortOrder === 'desc'
+            ? request()->except('page', 'sort_by', 'sort_order')
+            : array_merge(request()->except('page', 'sort_by', 'sort_order'), ['sort_by' => $sortBy, 'sort_order' => $nextSortOrder($sortBy)]);
+        $sortIndicator = fn (string $sortBy) => $activeHeaderSortBy === $sortBy ? ($currentSortOrder === 'asc' ? ' ↑' : ' ↓') : '';
+        $sortUrl = fn (string $sortBy) => route($indexRoute, $nextSortUrlParams($sortBy));
+        $toolbarQuery = request()->except('page', 'per_page', 'sort_by', 'sort_order');
+        if (in_array(request('sort_by'), ['last_action_at', 'next_action_at', 'ota_count', 'status'], true)) {
+            $toolbarQuery['sort_by'] = $currentSortBy;
+            $toolbarQuery['sort_order'] = $currentSortOrder;
+        }
+    @endphp
+
+    <div class="page-header">
+        <div>
+            <p class="eyebrow">オペナビ</p>
+            <h1>顧客一覧</h1>
+        </div>
+        @unless ($isUserScreen)
+            <button class="button primary" type="button" data-import-open>CSVインポート</button>
+        @endunless
+    </div>
+
+    @if (session('import_warnings'))
+        <div class="toast warning">
+            <strong>インポート時にスキップした行があります。</strong>
+            @foreach (session('import_warnings') as $warning)
+                <div>{{ $warning }}</div>
+            @endforeach
+        </div>
+    @endif
+
+    <div class="list-layout">
+        <form class="filters" method="get" action="{{ route($indexRoute) }}">
+            <div class="filters__date-range" aria-labelledby="next-action-period-label">
+                <span id="next-action-period-label" class="filters__date-range-label">期間</span>
+                <div class="filters__date-range-controls">
+                    <div class="list-date-picker" data-list-date-picker>
+                        <input type="hidden" name="next_action_from" value="{{ $filters['next_action_from'] ?? '' }}" data-list-date-value>
+                        <button
+                            class="list-date-picker__trigger"
+                            type="button"
+                            aria-haspopup="dialog"
+                            aria-expanded="false"
+                            aria-controls="search-next-action-from-calendar"
+                        >
+                            <span data-list-date-label></span>
+                            <img class="list-date-picker__icon" src="{{ asset('images/calendar.png') }}" alt="" aria-hidden="true">
+                        </button>
+                        <section
+                            id="search-next-action-from-calendar"
+                            class="list-date-picker__calendar"
+                            role="dialog"
+                            aria-label="開始日を選択"
+                            hidden
+                        >
+                            <header class="list-date-picker__head">
+                                <button class="list-date-picker__nav" type="button" data-prev-month aria-label="前月">‹</button>
+                                <h2 class="list-date-picker__month" data-month-label></h2>
+                                <button class="list-date-picker__nav" type="button" data-next-month aria-label="翌月">›</button>
+                            </header>
+                            <div class="list-date-picker__weekdays" aria-hidden="true">
+                                <span>日</span>
+                                <span>月</span>
+                                <span>火</span>
+                                <span>水</span>
+                                <span>木</span>
+                                <span>金</span>
+                                <span>土</span>
+                            </div>
+                            <div class="list-date-picker__dates" data-dates role="grid" aria-label="日付"></div>
+                            <footer class="list-date-picker__foot">
+                                <button class="list-date-picker__text-button" type="button" data-clear>クリア</button>
+                                <button class="list-date-picker__text-button" type="button" data-today>今日</button>
+                            </footer>
+                        </section>
+                    </div>
+                    <span class="filters__date-range-separator" aria-hidden="true">〜</span>
+                    <div class="list-date-picker" data-list-date-picker>
+                        <input type="hidden" name="next_action_to" value="{{ $filters['next_action_to'] ?? '' }}" data-list-date-value>
+                        <button
+                            class="list-date-picker__trigger"
+                            type="button"
+                            aria-haspopup="dialog"
+                            aria-expanded="false"
+                            aria-controls="search-next-action-to-calendar"
+                        >
+                            <span data-list-date-label></span>
+                            <img class="list-date-picker__icon" src="{{ asset('images/calendar.png') }}" alt="" aria-hidden="true">
+                        </button>
+                        <section
+                            id="search-next-action-to-calendar"
+                            class="list-date-picker__calendar"
+                            role="dialog"
+                            aria-label="終了日を選択"
+                            hidden
+                        >
+                            <header class="list-date-picker__head">
+                                <button class="list-date-picker__nav" type="button" data-prev-month aria-label="前月">‹</button>
+                                <h2 class="list-date-picker__month" data-month-label></h2>
+                                <button class="list-date-picker__nav" type="button" data-next-month aria-label="翌月">›</button>
+                            </header>
+                            <div class="list-date-picker__weekdays" aria-hidden="true">
+                                <span>日</span>
+                                <span>月</span>
+                                <span>火</span>
+                                <span>水</span>
+                                <span>木</span>
+                                <span>金</span>
+                                <span>土</span>
+                            </div>
+                            <div class="list-date-picker__dates" data-dates role="grid" aria-label="日付"></div>
+                            <footer class="list-date-picker__foot">
+                                <button class="list-date-picker__text-button" type="button" data-clear>クリア</button>
+                                <button class="list-date-picker__text-button" type="button" data-today>今日</button>
+                            </footer>
+                        </section>
+                    </div>
+                </div>
+            </div>
+            <label class="filters__compact">
+                Rank
+                <select name="rank">
+                    <option value="">すべて</option>
+                    @foreach ($ranks as $rank)
+                        <option value="{{ $rank }}" @selected(($filters['rank'] ?? '') === $rank)>{{ $rank }}</option>
+                    @endforeach
+                </select>
+            </label>
+            <label class="filters__compact">
+                相手担当者
+                <select name="activity_contact_person">
+                    <option value="">すべて</option>
+                    <option value="filled" @selected(($filters['activity_contact_person'] ?? '') === 'filled')>入力あり</option>
+                    <option value="blank" @selected(($filters['activity_contact_person'] ?? '') === 'blank')>未入力</option>
+                </select>
+            </label>
+            <label class="filters__keyword">
+                事業者名・電話番号・住所・営業メモ
+                <input type="search" name="keyword" value="{{ $filters['keyword'] ?? '' }}" placeholder="検索">
+            </label>
+            <div class="filter-actions">
+                <button class="button primary" type="submit">検索</button>
+                <a class="button" href="{{ route($indexRoute) }}">条件をクリア</a>
+            </div>
+        </form>
+
+        <form class="list-toolbar" method="get" action="{{ route($indexRoute) }}">
+            @foreach ($toolbarQuery as $name => $value)
+                @if (is_scalar($value))
+                    <input type="hidden" name="{{ $name }}" value="{{ $value }}">
+                @endif
+            @endforeach
+            <label class="per-page-control" aria-label="表示件数">
+                <select name="per_page" onchange="this.form.submit()">
+                    @foreach ([25, 50, 100] as $perPage)
+                        <option value="{{ $perPage }}" @selected((int) ($filters['per_page'] ?? 25) === $perPage)>{{ $perPage }}件</option>
+                    @endforeach
+                </select>
+            </label>
+        </form>
+
+        @if (session('status'))
+            <div class="toast success">{{ session('status') }}</div>
+        @endif
+
+        <section class="table-panel" data-customer-list-panel>
+            @if ($customers->count() === 0)
+                <div class="empty-state">
+                    @if (request()->query())
+                        条件に一致する顧客が見つかりませんでした。
+                    @else
+                        @if ($isUserScreen)
+                            まだ表示できる顧客がありません。
+                        @else
+                            まだ顧客が登録されていません。CSVインポートから顧客リストを登録してください。
+                        @endif
+                    @endif
+                </div>
+            @else
+                @unless ($isUserScreen)
+                    <form id="bulk-owner-form" class="bulk-actions" method="post" action="{{ route('customers.bulk-owner') }}" data-bulk-owner-form>
+                        @csrf
+                        @method('patch')
+                        <input type="hidden" name="redirect_to" value="{{ url()->full() }}">
+                        <label>
+                            一括コール担当設定
+                            <select name="owner_id">
+                                <option value="">未担当</option>
+                                @foreach ($users as $user)
+                                    <option value="{{ $user->id }}">{{ $user->name }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+                        <button class="button" type="submit">選択した顧客に適用</button>
+                        <span class="muted-text" data-bulk-selected-count>0件選択中</span>
+                    </form>
+                @endunless
+                <div class="table-scroll">
+                    <table class="customer-table {{ $isUserScreen ? 'customer-table--user' : '' }}">
+                        <thead>
+                            <tr>
+                                @unless ($isUserScreen)
+                                    <th class="select-col">
+                                        <input type="checkbox" data-bulk-check-all aria-label="表示中の顧客をすべて選択">
+                                    </th>
+                                @endunless
+                                <th class="sticky-col">事業者名</th>
+                                <th class="registered-col">登録日</th>
+                                <th class="region-col">都道府県</th>
+                                <th class="area-col">店舗</th>
+                                <th @class(['sortable-header', 'is-sorted' => $activeHeaderSortBy === 'ota_count'])>
+                                    <a class="sortable-header__link" href="{{ $sortUrl('ota_count') }}" data-customer-sort-link aria-label="掲載OTA数を{{ $nextSortOrder('ota_count') === 'asc' ? '昇順' : '降順' }}で並び替え">
+                                        <span>掲載OTA数</span>
+                                        <span class="sortable-header__arrows" aria-hidden="true">{{ $activeHeaderSortBy === 'ota_count' ? trim($sortIndicator('ota_count')) : '↑↓' }}</span>
+                                    </a>
+                                </th>
+                                <th>リクエスト予約</th>
+                                <th class="status-col">ステータス</th>
+                                <th class="owner-col">コール担当</th>
+                                <th @class(['sortable-header', 'is-sorted' => $activeHeaderSortBy === 'last_action_at'])>
+                                    <a class="sortable-header__link" href="{{ $sortUrl('last_action_at') }}" data-customer-sort-link aria-label="最終アクションを{{ $nextSortOrder('last_action_at') === 'asc' ? '昇順' : '降順' }}で並び替え">
+                                        <span>最終アクション</span>
+                                        <span class="sortable-header__arrows" aria-hidden="true">{{ $activeHeaderSortBy === 'last_action_at' ? trim($sortIndicator('last_action_at')) : '↑↓' }}</span>
+                                    </a>
+                                </th>
+                                <th @class(['sortable-header', 'is-sorted' => $activeHeaderSortBy === 'next_action_at'])>
+                                    <a class="sortable-header__link" href="{{ $sortUrl('next_action_at') }}" data-customer-sort-link aria-label="次回アクションを{{ $nextSortOrder('next_action_at') === 'asc' ? '昇順' : '降順' }}で並び替え">
+                                        <span>次回アクション</span>
+                                        <span class="sortable-header__arrows" aria-hidden="true">{{ $activeHeaderSortBy === 'next_action_at' ? trim($sortIndicator('next_action_at')) : '↑↓' }}</span>
+                                    </a>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($customers as $customer)
+                                <tr data-customer-row="{{ $customer->id }}">
+                                    @unless ($isUserScreen)
+                                        <td class="select-col">
+                                            <input type="checkbox" form="bulk-owner-form" name="customer_ids[]" value="{{ $customer->id }}" data-bulk-check aria-label="{{ $customer->business_name }}を選択">
+                                        </td>
+                                    @endunless
+                                    <td class="sticky-col name-cell">
+                                        <div class="name-cell__inner">
+                                            <a href="{{ route($showRoute, array_merge(['customer' => $customer], request()->query())) }}" data-drawer-url="{{ route($showRoute, array_merge(['customer' => $customer, 'modal' => 1], request()->query())) }}" data-customer-id="{{ $customer->id }}" data-customer-name-link>{{ $customer->business_name }}</a>
+                                            <a class="detail-link" href="{{ route($showRoute, array_merge(['customer' => $customer], request()->query())) }}" target="_blank" rel="noreferrer" title="別タブで詳細を開く" aria-label="別タブで詳細を開く">
+                                                <img src="{{ asset('images/external-link.png') }}" alt="">
+                                            </a>
+                                        </div>
+                                    </td>
+                                    <td class="registered-col">{{ optional($customer->registered_at)->format('Y/m/d') }}</td>
+                                    <td class="region-col" data-customer-region>{{ $customer->region }}</td>
+                                    <td class="area-col" data-customer-area>{{ $customer->area_name }}</td>
+                                    <td>{{ $customer->ota_count }}</td>
+                                    <td data-customer-request-booking>{{ $customer->request_booking_status }}</td>
+                                    <td class="status-col">
+                                        <span class="status-pill status-pill--{{ \App\Models\Customer::statusClass($customer->status) }}" data-customer-status-pill>{{ $customer->status }}</span>
+                                    </td>
+                                    <td class="owner-col" data-customer-owner-cell>
+                                        @if ($isUserScreen)
+                                            <span data-customer-owner-text>{{ $customer->owner?->name ?? '未担当' }}</span>
+                                        @else
+                                            <form method="post" action="{{ route('customers.update', $customer) }}">
+                                                @csrf
+                                                @method('patch')
+                                                <input type="hidden" name="redirect_to" value="{{ url()->full() }}">
+                                                <select name="owner_id" onchange="this.form.submit()" data-customer-owner-select>
+                                                    <option value="">未担当</option>
+                                                    @foreach ($users as $user)
+                                                        <option value="{{ $user->id }}" @selected($customer->owner_id === $user->id)>{{ $user->name }}</option>
+                                                    @endforeach
+                                                </select>
+                                            </form>
+                                        @endif
+                                    </td>
+                                    <td data-customer-last-action>{{ optional($customer->last_action_at)->format('Y/m/d') ?? '-' }}</td>
+                                    <td data-customer-next-action>
+                                        <div class="date-inline" data-customer-next-action-content>
+                                            @if ($customer->next_action_at)
+                                                <span>{{ $customer->next_action_at->format('Y/m/d H:i') }}</span>
+                                                @if ($customer->next_action_at->isToday())
+                                                    <span class="badge danger">本日対応</span>
+                                                @elseif ($customer->next_action_at->isPast() && ! $customer->next_action_at->isToday())
+                                                    <span class="badge danger">期限切れ</span>
+                                                @endif
+                                            @else
+                                                <span class="muted-text">未設定</span>
+                                            @endif
+                                        </div>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+                {{ $customers->links() }}
+            @endif
+        </section>
+    </div>
+
+    <div class="drawer" data-drawer hidden>
+        <div class="drawer__backdrop" data-drawer-close></div>
+        <section class="drawer__panel">
+            <button class="icon-button drawer__close" type="button" data-drawer-close>×</button>
+            <div data-drawer-body>読み込み中...</div>
+        </section>
+    </div>
+
+    @unless ($isUserScreen)
+        <div class="modal" data-import-modal @if(!session('open_import')) hidden @endif>
+            <div class="modal__backdrop" data-import-close></div>
+            <section class="modal__panel">
+                <button class="icon-button modal__close" type="button" data-import-close>×</button>
+                <h2>CSVインポート</h2>
+                @if (session('import_errors'))
+                    <div class="toast error in-modal" data-import-errors>
+                        @foreach (session('import_errors') as $importError)
+                            <div>{{ $importError }}</div>
+                        @endforeach
+                    </div>
+                @endif
+                <form method="post" action="{{ route('customers.import') }}" enctype="multipart/form-data" class="stack-form" data-import-form>
+                    @csrf
+                    <a class="button" href="{{ asset('templates/opnavi_import_template.csv') }}" download>テンプレートをダウンロード</a>
+                    <label>
+                        CSVファイル
+                        <input type="file" name="csv_file" accept=".csv,text/csv" required>
+                    </label>
+                    <label class="checkbox">
+                        <input type="checkbox" name="confirm_duplicates" value="1">
+                        重複した事業者名 + 住所は更新して取り込む
+                    </label>
+                    <button class="button primary" type="submit">インポート</button>
+                </form>
+            </section>
+        </div>
+    @endunless
+</x-layouts.app>
