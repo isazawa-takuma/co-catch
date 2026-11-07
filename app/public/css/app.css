@@ -2123,6 +2123,27 @@ th.sticky-col {
     }
 }
 
+.user-credentials {
+    margin-bottom: 24px;
+    padding: 22px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+}
+
+.user-credentials h2,
+.user-credentials p {
+    margin: 0;
+}
+
+.user-credentials textarea {
+    line-height: 1.7;
+}
+
+.user-credentials .form-actions {
+    flex-wrap: wrap;
+}
+
 .drawer,
 .modal {
     position: fixed;

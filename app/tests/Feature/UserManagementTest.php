@@ -6,9 +6,9 @@ use App\Models\Activity;
 use App\Models\Customer;
 use App\Models\DailyCallResult;
 use App\Models\User;
-use App\Mail\UserInvitationMail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use RuntimeException;
@@ -72,7 +72,8 @@ class UserManagementTest extends TestCase
         $response->assertSee('営業');
         $response->assertSee('value="admin"', false);
         $response->assertSee('戻る');
-        $response->assertSee('送信');
+        $response->assertSee('登録');
+        $response->assertSee('メールは送信されません。');
         $response->assertSee('管理者');
         $response->assertSee(route('admin.user-management.activities', User::where('email', 'admin@example.com')->firstOrFail()), false);
         $response->assertSee('admin@example.com');
@@ -92,6 +93,7 @@ class UserManagementTest extends TestCase
         $response->assertSee(route('admin.user-management.deactivate', User::where('email', 'admin@example.com')->firstOrFail()), false);
         $response->assertDontSee(route('admin.user-management.role.edit', $admin), false);
         $response->assertDontSee(route('admin.user-management.deactivate', $admin), false);
+        $response->assertDontSee(route('admin.user-management.reissue', $admin), false);
     }
 
     public function test_admin_can_open_user_activity_status_from_user_management(): void
@@ -211,7 +213,7 @@ class UserManagementTest extends TestCase
         $response->assertSessionHasErrors('result_to');
     }
 
-    public function test_user_invitation_creates_user_and_sends_mail(): void
+    public function test_user_creation_displays_credentials_once_without_sending_mail(): void
     {
         Mail::fake();
 
@@ -222,7 +224,7 @@ class UserManagementTest extends TestCase
         ]);
 
         $response->assertRedirect('/opnavi/admin/user_management');
-        $response->assertSessionHas('status', 'ユーザーを追加し、招待メールを送信しました。');
+        $response->assertSessionHas('status', 'ユーザーを追加しました。ログイン情報を本人に共有してください。');
 
         $user = User::where('email', 'new-user@illuvia-inc.com')->firstOrFail();
         $this->assertSame('new-user@illuvia-inc.com', $user->name);
@@ -233,12 +235,26 @@ class UserManagementTest extends TestCase
         $this->assertTrue($user->initial_password_expires_at->between(now()->addDays(6)->addHours(23), now()->addDays(7)->addMinute()));
         $this->assertTrue(Hash::check('Passw0rd123', $user->password));
 
-        Mail::assertSent(UserInvitationMail::class, function (UserInvitationMail $mail) use ($user) {
-            return $mail->hasTo('new-user@illuvia-inc.com')
-                && $mail->user->is($user)
-                && $mail->initialPassword === 'Passw0rd123'
-                && $mail->loginUrl === url('/opnavi/user/login');
-        });
+        Mail::assertNothingOutgoing();
+        $encryptedCredentials = session('user_credentials');
+        $this->assertStringNotContainsString('Passw0rd123', $encryptedCredentials);
+        $credentials = Crypt::decrypt($encryptedCredentials);
+        $this->assertSame('new-user@illuvia-inc.com', $credentials['email']);
+        $this->assertSame('Passw0rd123', $credentials['initial_password']);
+        $this->assertSame(url('/opnavi/user/login'), $credentials['login_url']);
+
+        $page = $this->get('/opnavi/admin/user_management');
+        $page->assertOk();
+        $page->assertSee('data-user-credentials-copy', false);
+        $page->assertSee('Passw0rd123');
+        $page->assertSee($credentials['login_url']);
+        $page->assertSee($credentials['expires_at']);
+        $page->assertSessionMissing('user_credentials');
+        $this->assertStringContainsString('no-store', $page->headers->get('Cache-Control'));
+
+        $this->get('/opnavi/admin/user_management')
+            ->assertDontSee('Passw0rd123')
+            ->assertDontSee('data-user-credentials-copy', false);
     }
 
     public function test_user_invitation_requires_illuvia_email_domain(): void
@@ -253,6 +269,8 @@ class UserManagementTest extends TestCase
 
         $response->assertRedirect('/opnavi/admin/user_management');
         $response->assertSessionHasErrors('email');
+        $response->assertSessionMissing('_old_input.initial_password');
+        $response->assertSessionMissing('user_credentials');
         $this->assertDatabaseMissing('users', ['email' => 'new-user@example.com']);
         Mail::assertNothingSent();
 
@@ -263,26 +281,23 @@ class UserManagementTest extends TestCase
         $page->assertDontSee('data-user-invite-modal hidden', false);
     }
 
-    public function test_user_invitation_rolls_back_user_when_mail_sending_fails(): void
+    public function test_user_creation_does_not_require_a_configured_mailer(): void
     {
-        Mail::shouldReceive('to')
-            ->once()
-            ->with('failed-user@illuvia-inc.com')
-            ->andThrow(new RuntimeException('mail failed'));
+        config(['mail.default' => 'unconfigured-mailer']);
 
         $response = $this->actingAs($this->adminUser())->post('/opnavi/admin/user_management', [
-            'email' => 'failed-user@illuvia-inc.com',
+            'email' => 'no-mail@illuvia-inc.com',
             'initial_password' => 'Passw0rd123',
             'role' => 'admin',
         ]);
 
         $response->assertRedirect('/opnavi/admin/user_management');
-        $response->assertSessionHas('error', '招待メールの送信に失敗しました。メール設定を確認してから再度お試しください。');
-        $response->assertSessionHas('open_user_invite', true);
-        $this->assertDatabaseMissing('users', ['email' => 'failed-user@illuvia-inc.com']);
+        $response->assertSessionMissing('error');
+        $this->assertDatabaseHas('users', ['email' => 'no-mail@illuvia-inc.com']);
+        $this->assertSame(url('/opnavi/admin/login'), Crypt::decrypt(session('user_credentials'))['login_url']);
     }
 
-    public function test_initial_password_can_be_reissued_and_sent_by_mail(): void
+    public function test_initial_password_can_be_reissued_without_sending_mail(): void
     {
         Mail::fake();
         $user = User::factory()->create([
@@ -303,16 +318,21 @@ class UserManagementTest extends TestCase
         $this->assertNotNull($user->initial_password_expires_at);
         $this->assertTrue($user->initial_password_expires_at->between(now()->addDays(6)->addHours(23), now()->addDays(7)->addMinute()));
 
-        Mail::assertSent(UserInvitationMail::class, function (UserInvitationMail $mail) use ($user) {
-            return $mail->hasTo('reissue-user@illuvia-inc.com')
-                && $mail->user->is($user)
-                && strlen($mail->initialPassword) === 12
-                && Hash::check($mail->initialPassword, $user->password)
-                && $mail->loginUrl === url('/opnavi/user/login');
-        });
+        Mail::assertNothingOutgoing();
+        $credentials = Crypt::decrypt(session('user_credentials'));
+        $this->assertSame($user->email, $credentials['email']);
+        $this->assertSame(12, strlen($credentials['initial_password']));
+        $this->assertMatchesRegularExpression('/[a-zA-Z]/', $credentials['initial_password']);
+        $this->assertMatchesRegularExpression('/[0-9]/', $credentials['initial_password']);
+        $this->assertTrue(Hash::check($credentials['initial_password'], $user->password));
+        $this->assertFalse(Hash::check('Oldpass123', $user->password));
+        $this->assertSame(url('/opnavi/user/login'), $credentials['login_url']);
+
+        $this->get('/opnavi/admin/user_management')->assertSee($credentials['initial_password']);
+        $this->get('/opnavi/admin/user_management')->assertDontSee($credentials['initial_password']);
     }
 
-    public function test_initial_password_reissue_rolls_back_when_mail_sending_fails(): void
+    public function test_initial_password_reissue_does_not_require_a_configured_mailer(): void
     {
         $user = User::factory()->create([
             'email' => 'reissue-failed@illuvia-inc.com',
@@ -321,22 +341,67 @@ class UserManagementTest extends TestCase
             'must_change_password' => false,
             'initial_password_expires_at' => null,
         ]);
-        $originalPassword = $user->password;
-
-        Mail::shouldReceive('to')
-            ->once()
-            ->with('reissue-failed@illuvia-inc.com')
-            ->andThrow(new RuntimeException('mail failed'));
+        config(['mail.default' => 'unconfigured-mailer']);
 
         $response = $this->actingAs($this->adminUser())->post(route('admin.user-management.reissue', $user));
 
         $response->assertRedirect('/opnavi/admin/user_management');
-        $response->assertSessionHas('error', '初期パスワードの再発行に失敗しました。メール設定を確認してから再度お試しください。');
+        $response->assertSessionMissing('error');
 
         $user->refresh();
-        $this->assertSame($originalPassword, $user->password);
-        $this->assertFalse($user->must_change_password);
-        $this->assertNull($user->initial_password_expires_at);
+        $credentials = Crypt::decrypt(session('user_credentials'));
+        $this->assertTrue(Hash::check($credentials['initial_password'], $user->password));
+        $this->assertSame(url('/opnavi/admin/login'), $credentials['login_url']);
+    }
+
+    public function test_failed_user_creation_does_not_expose_credentials(): void
+    {
+        $admin = $this->adminUser();
+        User::creating(function () {
+            throw new RuntimeException('database failed');
+        });
+
+        $response = $this->actingAs($admin)->post('/opnavi/admin/user_management', [
+            'email' => 'failed-user@illuvia-inc.com',
+            'initial_password' => 'Passw0rd123',
+            'role' => 'sales',
+        ]);
+
+        $response->assertSessionHas('error', 'ユーザーの追加に失敗しました。時間をおいて再度お試しください。');
+        $response->assertSessionHas('open_user_invite', true);
+        $response->assertSessionMissing('user_credentials');
+        $response->assertSessionMissing('_old_input.initial_password');
+        $this->assertDatabaseMissing('users', ['email' => 'failed-user@illuvia-inc.com']);
+    }
+
+    public function test_failed_reissue_preserves_the_previous_password(): void
+    {
+        $user = $this->salesUser();
+        $admin = $this->adminUser();
+        $originalPassword = $user->password;
+        User::updating(function () {
+            throw new RuntimeException('database failed');
+        });
+
+        $response = $this->actingAs($admin)->post(route('admin.user-management.reissue', $user));
+
+        $response->assertSessionHas('error', '初期パスワードの再発行に失敗しました。時間をおいて再度お試しください。');
+        $response->assertSessionMissing('user_credentials');
+        $this->assertSame($originalPassword, $user->fresh()->password);
+        $this->assertFalse($user->fresh()->must_change_password);
+    }
+
+    public function test_admin_cannot_reissue_own_password_and_lose_access_to_credentials(): void
+    {
+        $admin = $this->adminUser();
+        $originalPassword = $admin->password;
+
+        $this->actingAs($admin)->post(route('admin.user-management.reissue', $admin))
+            ->assertSessionHas('error', '自分自身の初期パスワードは再発行できません。パスワード変更をご利用ください。')
+            ->assertSessionMissing('user_credentials');
+
+        $this->assertSame($originalPassword, $admin->fresh()->password);
+        $this->assertFalse($admin->fresh()->must_change_password);
     }
 
     public function test_admin_can_change_user_role(): void

@@ -44,6 +44,8 @@ services:
       timeout: 5s
   mailpit:
     image: 'axllent/mailpit:latest'
+    profiles:
+      - mail
     ports:
       - '${FORWARD_MAILPIT_PORT:-1025}:1025'
       - '${FORWARD_MAILPIT_DASHBOARD_PORT:-8025}:8025'

@@ -2,26 +2,29 @@
 
 namespace App\Http\Controllers;
 
-use App\Mail\UserInvitationMail;
 use App\Models\Activity;
 use App\Models\DailyCallResult;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 use Throwable;
 
 class UserManagementController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        return view('user_management.index', [
+        $credentials = $request->session()->pull('user_credentials');
+
+        return response()->view('user_management.index', [
             'users' => User::orderBy('id')->get(),
-        ]);
+            'credentials' => $credentials ? Crypt::decrypt($credentials) : null,
+        ])->header('Cache-Control', 'no-store, private');
     }
 
     public function activities(Request $request, User $user)
@@ -81,13 +84,13 @@ class UserManagementController extends Controller
     {
         $validated = $request->validate([
             'email' => ['required', 'email', 'regex:/^[^@\s]+@illuvia-inc\.com$/', 'unique:users,email'],
-            'initial_password' => ['required', 'string', 'min:8'],
+            'initial_password' => ['required', 'string', Password::min(8)->letters()->numbers()],
             'role' => ['required', Rule::in(['appointment', 'sales', 'admin'])],
         ]);
 
         try {
-            DB::transaction(function () use ($validated) {
-                $user = User::create([
+            $user = DB::transaction(function () use ($validated) {
+                return User::create([
                     'name' => $validated['email'],
                     'email' => $validated['email'],
                     'password' => Hash::make($validated['initial_password']),
@@ -96,29 +99,30 @@ class UserManagementController extends Controller
                     'must_change_password' => true,
                     'initial_password_expires_at' => now()->addWeek(),
                 ]);
-
-                Mail::to($user->email)->send(new UserInvitationMail(
-                    $user,
-                    $validated['initial_password'],
-                    $this->loginUrlForRole($user->role),
-                ));
             });
         } catch (Throwable) {
             return redirect()
                 ->route('admin.user-management.index')
                 ->withInput($request->except('initial_password'))
                 ->with('open_user_invite', true)
-                ->with('error', '招待メールの送信に失敗しました。メール設定を確認してから再度お試しください。');
+                ->with('error', 'ユーザーの追加に失敗しました。時間をおいて再度お試しください。');
         }
 
-        return redirect()
-            ->route('admin.user-management.index')
-            ->with('status', 'ユーザーを追加し、招待メールを送信しました。');
+        return $this->credentialsRedirect($user, $validated['initial_password'])
+            ->with('status', 'ユーザーを追加しました。ログイン情報を本人に共有してください。');
     }
 
-    public function reissue(User $user)
+    public function reissue(Request $request, User $user)
     {
-        $initialPassword = Str::random(12);
+        if ($request->user()->is($user)) {
+            return redirect()
+                ->route('admin.user-management.index')
+                ->with('error', '自分自身の初期パスワードは再発行できません。パスワード変更をご利用ください。');
+        }
+
+        do {
+            $initialPassword = Str::random(12);
+        } while (! preg_match('/[a-zA-Z]/', $initialPassword) || ! preg_match('/[0-9]/', $initialPassword));
 
         try {
             DB::transaction(function () use ($user, $initialPassword) {
@@ -127,22 +131,28 @@ class UserManagementController extends Controller
                     'must_change_password' => true,
                     'initial_password_expires_at' => now()->addWeek(),
                 ])->save();
-
-                Mail::to($user->email)->send(new UserInvitationMail(
-                    $user,
-                    $initialPassword,
-                    $this->loginUrlForRole($user->role),
-                ));
             });
         } catch (Throwable) {
             return redirect()
                 ->route('admin.user-management.index')
-                ->with('error', '初期パスワードの再発行に失敗しました。メール設定を確認してから再度お試しください。');
+                ->with('error', '初期パスワードの再発行に失敗しました。時間をおいて再度お試しください。');
         }
 
+        return $this->credentialsRedirect($user, $initialPassword)
+            ->with('status', $user->email.' の初期パスワードを再発行しました。');
+    }
+
+    private function credentialsRedirect(User $user, string $initialPassword)
+    {
+        // Keep plaintext credentials out of session storage and consume them on the next index view.
         return redirect()
             ->route('admin.user-management.index')
-            ->with('status', $user->email.' の初期パスワードを再発行しました。');
+            ->with('user_credentials', Crypt::encrypt([
+                'email' => $user->email,
+                'initial_password' => $initialPassword,
+                'login_url' => $this->loginUrlForRole($user->role),
+                'expires_at' => $user->initial_password_expires_at->format('Y/m/d H:i'),
+            ]));
     }
 
     public function editRole(Request $request, User $user)

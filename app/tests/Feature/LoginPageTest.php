@@ -2,9 +2,9 @@
 
 namespace Tests\Feature;
 
-use App\Mail\UserInvitationMail;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
@@ -47,21 +47,14 @@ class LoginPageTest extends TestCase
             'initial_password' => 'Passw0rd123',
             'role' => 'admin',
         ]);
+        $this->assertSame(url('/opnavi/admin/login'), Crypt::decrypt(session('user_credentials'))['login_url']);
         $this->actingAs($this->adminUser())->post('/opnavi/admin/user_management', [
             'email' => 'appointment-user@illuvia-inc.com',
             'initial_password' => 'Passw0rd123',
             'role' => 'appointment',
         ]);
-
-        $admin = User::where('email', 'admin-user@illuvia-inc.com')->firstOrFail();
-        $appointment = User::where('email', 'appointment-user@illuvia-inc.com')->firstOrFail();
-
-        Mail::assertSent(UserInvitationMail::class, function (UserInvitationMail $mail) use ($admin) {
-            return $mail->user->is($admin) && $mail->loginUrl === url('/opnavi/admin/login');
-        });
-        Mail::assertSent(UserInvitationMail::class, function (UserInvitationMail $mail) use ($appointment) {
-            return $mail->user->is($appointment) && $mail->loginUrl === url('/opnavi/user/login');
-        });
+        $this->assertSame(url('/opnavi/user/login'), Crypt::decrypt(session('user_credentials'))['login_url']);
+        Mail::assertNothingOutgoing();
     }
 
     public function test_admin_can_login_from_admin_login_page(): void

@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeCustomerSortLinks(document);
     initializeImportModal();
     initializeUserInviteModal();
+    initializeUserCredentials();
     initializeMyPageRefreshButton();
     initializeMyPageConfirmationModal();
     initializeRowActionMenus();
@@ -1745,6 +1746,11 @@ function initializeUserInviteModal() {
         return;
     }
 
+    if (! modal.hidden) {
+        modal.querySelector('[data-user-invite-password]').value = generateInitialPassword();
+        lockPageScroll();
+    }
+
     document.querySelector('[data-user-invite-open]')?.addEventListener('click', () => {
         openUserInviteModal();
     });
@@ -1824,9 +1830,42 @@ function initializeMyPageRefreshButton() {
 function generateInitialPassword() {
     const characters = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
     const bytes = new Uint32Array(12);
-    window.crypto.getRandomValues(bytes);
+    let password;
 
-    return Array.from(bytes, (byte) => characters[byte % characters.length]).join('');
+    do {
+        window.crypto.getRandomValues(bytes);
+        password = Array.from(bytes, (byte) => characters[byte % characters.length]).join('');
+    } while (! /[a-zA-Z]/.test(password) || ! /[0-9]/.test(password));
+
+    return password;
+}
+
+function initializeUserCredentials() {
+    const panel = document.querySelector('[data-user-credentials]');
+    if (! panel) {
+        return;
+    }
+
+    const text = panel.querySelector('[data-user-credentials-text]');
+    const button = panel.querySelector('[data-user-credentials-copy]');
+    const status = panel.querySelector('[data-user-credentials-status]');
+
+    button.addEventListener('click', async () => {
+        try {
+            await navigator.clipboard.writeText(text.value);
+            status.textContent = 'コピーしました。本人の個別チャットに貼り付けてください。';
+        } catch {
+            text.focus();
+            text.select();
+            status.textContent = '自動コピーできませんでした。選択された情報を手動でコピーしてください。';
+        }
+    });
+
+    window.addEventListener('pagehide', () => {
+        text.value = '';
+        text.textContent = '';
+        panel.remove();
+    });
 }
 
 function lockPageScroll() {

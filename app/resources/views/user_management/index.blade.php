@@ -7,6 +7,28 @@
         <button class="button primary" type="button" data-user-invite-open>追加</button>
     </div>
 
+    @if ($credentials)
+        @php
+            $shareText = "コキャッチのログイン情報\n"
+                ."ログインID（メールアドレス）: ".$credentials['email']."\n"
+                ."初期パスワード: ".$credentials['initial_password']."\n"
+                ."ログインURL: ".$credentials['login_url']."\n"
+                ."初期パスワードの有効期限: ".$credentials['expires_at']."\n\n"
+                ."初回ログイン後、氏名と新しいパスワードを設定してください。";
+        @endphp
+        <section class="user-credentials stack-form" data-user-credentials aria-labelledby="user-credentials-heading">
+            <h2 id="user-credentials-heading">ログイン情報を本人に共有してください</h2>
+            <p>メールは送信されません。以下をコピーして、Slackなどの個別チャットで本人に送付してください。</p>
+            <label for="user-credentials-text">共有用のログイン情報</label>
+            <textarea id="user-credentials-text" rows="8" readonly spellcheck="false" data-user-credentials-text>{{ $shareText }}</textarea>
+            <p class="form-hint">この情報は今回のみ表示されます。画面を離れる前にコピーしてください。確認できなくなった場合は初期パスワードを再発行できます。</p>
+            <div class="form-actions">
+                <button class="button primary" type="button" data-user-credentials-copy>ログイン情報をコピー</button>
+                <span role="status" aria-live="polite" data-user-credentials-status></span>
+            </div>
+        </section>
+    @endif
+
     <section class="table-panel">
         @if ($users->count() === 0)
             <div class="empty-state">
@@ -38,23 +60,23 @@
                                 <td>{{ $user->is_active ? '有効' : '停止中' }}</td>
                                 <td>{{ optional($user->created_at)->format('Y/m/d') ?? '-' }}</td>
                                 <td class="row-menu-col">
-                                    <details class="row-action-menu">
-                                        <summary aria-label="{{ $user->email }} の操作">⋮</summary>
-                                        <div class="row-action-menu__items">
-                                            <form method="post" action="{{ route('admin.user-management.reissue', $user) }}" data-confirm-submit="{{ $user->email }} の初期パスワードを再発行しますか？">
-                                                @csrf
-                                                <button type="submit">初期パスワード再発行</button>
-                                            </form>
-                                            @unless (auth()->user()->is($user))
+                                    @unless (auth()->user()->is($user))
+                                        <details class="row-action-menu">
+                                            <summary aria-label="{{ $user->email }} の操作">⋮</summary>
+                                            <div class="row-action-menu__items">
+                                                <form method="post" action="{{ route('admin.user-management.reissue', $user) }}" data-confirm-submit="{{ $user->email }} の初期パスワードを再発行しますか？">
+                                                    @csrf
+                                                    <button type="submit">初期パスワード再発行</button>
+                                                </form>
                                                 <a href="{{ route('admin.user-management.role.edit', $user) }}">権限変更</a>
                                                 <form method="post" action="{{ route('admin.user-management.deactivate', $user) }}" data-confirm-submit="{{ $user->email }} を無効化しますか？">
                                                     @csrf
                                                     @method('patch')
                                                     <button type="submit">無効化</button>
                                                 </form>
-                                            @endunless
-                                        </div>
-                                    </details>
+                                            </div>
+                                        </details>
+                                    @endunless
                                 </td>
                             </tr>
                         @endforeach
@@ -69,6 +91,7 @@
         <section class="modal__panel">
             <button class="icon-button modal__close" type="button" data-user-invite-close>×</button>
             <h2>ユーザーを追加</h2>
+            <p class="form-hint">メールは送信されません。登録後に表示されるログイン情報を本人に共有してください。</p>
             <form class="stack-form" method="post" action="{{ route('admin.user-management.store') }}" data-user-invite-form>
                 @csrf
                 <label>
@@ -77,7 +100,7 @@
                 </label>
                 <label>
                     初期パスワード
-                    <input type="text" name="initial_password" value="{{ old('initial_password') }}" data-user-invite-password autocomplete="new-password" required minlength="8">
+                    <input type="text" name="initial_password" data-user-invite-password autocomplete="new-password" required minlength="8">
                     <span class="form-hint">最低8文字・英数字混在</span>
                 </label>
                 <label>
@@ -90,7 +113,7 @@
                 </label>
                 <div class="form-actions">
                     <button class="button" type="button" data-user-invite-close>戻る</button>
-                    <button class="button primary" type="submit">送信</button>
+                    <button class="button primary" type="submit">登録</button>
                 </div>
             </form>
         </section>
