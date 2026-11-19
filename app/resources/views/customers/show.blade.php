@@ -10,7 +10,7 @@
             <h1>{{ $customer->business_name }}</h1>
         </div>
         <div class="header-actions">
-            <a class="button" href="{{ route($indexRoute, request()->query()) }}">一覧へ戻る</a>
+            <a class="button" href="{{ route($indexRoute, $detailQuery) }}">一覧へ戻る</a>
             @unless ($isUserScreen)
                 <form method="post" action="{{ route('customers.destroy', $customer) }}" onsubmit="return confirm('この顧客を削除しますか？');">
                     @csrf

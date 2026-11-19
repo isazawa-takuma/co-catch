@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\Customer;
+use App\Support\WebUrl;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -13,6 +14,14 @@ class CustomerUpdateRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $website = $this->input('website_url');
+        if (is_string($website) && $website === $this->route('customer')?->website_url && WebUrl::optional($website) === null) {
+            $this->merge(['website_url' => null]);
+        }
+    }
+
     public function rules(): array
     {
         return [
@@ -21,7 +30,7 @@ class CustomerUpdateRequest extends FormRequest
             'region' => ['sometimes', 'required', 'string', 'max:255'],
             'area_name' => ['sometimes', 'required', 'string', 'max:255'],
             'address' => ['sometimes', 'required', 'string', 'max:255'],
-            'website_url' => ['nullable', 'url', 'max:1000'],
+            'website_url' => ['nullable', 'url', 'regex:~^https?://~i', 'max:1000'],
             'head_office_phone' => ['nullable', 'string', 'max:255'],
             'public_phone' => ['nullable', 'string', 'max:255'],
             'contact_phone' => ['nullable', 'string', 'max:255'],

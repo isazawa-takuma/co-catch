@@ -15,7 +15,10 @@ class OtaLink extends Model
         'customer_id',
         'ota_name',
         'listing_url',
+        'is_listed',
     ];
+
+    protected $casts = ['is_listed' => 'boolean'];
 
     public function customer()
     {

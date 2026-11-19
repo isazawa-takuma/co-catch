@@ -11,9 +11,18 @@ use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 
 class CustomerQueryService
 {
+    public static function listContext(array $values): array
+    {
+        return Arr::only(array_filter($values, 'is_scalar'), [
+            'keyword', 'region', 'owner_id', 'rank', 'activity_contact_person', 'next_action_from',
+            'next_action_to', 'chip', 'sort_by', 'sort_order', 'page', 'per_page',
+        ]);
+    }
+
     public function paginate(Request $request, ?int $scopeUserId = null, string $scopeColumn = 'owner_id')
     {
         $query = Customer::query()->with('owner');
@@ -64,6 +73,14 @@ class CustomerQueryService
         $this->applyUserScope($query, $scopeUserId, $scopeColumn);
 
         $this->applyFilters($query, $request);
+
+        $neighbor = $request->query($offset === 1 ? 'nav_next' : 'nav_previous');
+        if (is_string($neighbor) && ctype_digit($neighbor)) {
+            // Keep the pre-save neighbor even if editing the memo removed the current row from the search.
+            return (int) $neighbor > 0 && (int) $neighbor !== (int) $customer->id
+                ? $query->whereKey($neighbor)->first()
+                : null;
+        }
 
         $this->applySort($query, $request);
 

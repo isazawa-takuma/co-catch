@@ -9,7 +9,7 @@
     $activityStoreRoute = $isUserScreen ? 'user.customers.activities.store' : 'customers.activities.store';
     $activityUpdateRoute = $isUserScreen ? 'user.customers.activities.update' : 'customers.activities.update';
     $activityRanks = \App\Models\Activity::RANKS;
-    $detailQuery = request()->except('modal');
+    $webUrl = \App\Support\WebUrl::optional($customer->website_url);
     $drawerQuery = array_merge($detailQuery, ['modal' => 1]);
     $nextActionBadge = null;
     if ($customer->next_action_at?->isToday()) {
@@ -73,9 +73,7 @@
         <form method="post" action="{{ route($customerUpdateRoute, $customer) }}" class="detail-form">
             @csrf
             @method('patch')
-            @if (request()->boolean('modal'))
-                <input type="hidden" name="modal" value="1">
-            @endif
+            @include('customers._navigation_fields')
             <label>
                 事業者名
                 <input type="text" name="business_name" value="{{ $customer->business_name }}" required @readonly($isUserScreen)>
@@ -95,9 +93,9 @@
             <label class="span-2">
                 Web URL
                 <span class="input-with-action">
-                    <input type="url" name="website_url" value="{{ $customer->website_url }}" @readonly($isUserScreen)>
-                    @if ($customer->website_url)
-                        <a class="button" href="{{ $customer->website_url }}" target="_blank" rel="noreferrer">Webサイトを開く</a>
+                    <input type="url" name="website_url" value="{{ $webUrl }}" @readonly($isUserScreen)>
+                    @if ($webUrl)
+                        <a class="button" href="{{ $webUrl }}" target="_blank" rel="noreferrer">Webサイトを開く</a>
                     @endif
                 </span>
             </label>
@@ -253,12 +251,28 @@
         </dl>
 
         <div class="link-list">
-            @forelse ($customer->otaLinks as $link)
-                <a href="{{ $link->listing_url }}" target="_blank" rel="noreferrer">{{ $link->ota_name }}</a>
+            @forelse ($customer->otaLinks->where('is_listed', true)->groupBy('ota_name') as $name => $listings)
+                <div>
+                    @foreach ($listings as $link)
+                        @if ($link->listing_url)
+                            <a href="{{ $link->listing_url }}" target="_blank" rel="noreferrer">{{ $loop->first ? $name : '別の掲載ページ' }}</a>
+                        @else
+                            <span class="muted-text">{{ $name }}（URL未登録）</span>
+                        @endif
+                    @endforeach
+                </div>
             @empty
                 <span class="muted-text">OTAリンクは未登録です</span>
             @endforelse
         </div>
+        @if ($customer->otaLinks->contains('is_listed', false))
+            <p>参考リンク（掲載OTA数の対象外）</p>
+            <div class="link-list">
+                @foreach ($customer->otaLinks->where('is_listed', false) as $link)
+                    <a href="{{ $link->listing_url }}" target="_blank" rel="noreferrer">{{ $link->ota_name }}</a>
+                @endforeach
+            </div>
+        @endif
     </section>
 </div>
 
@@ -269,9 +283,7 @@
     <h2>架電・対応履歴</h2>
     <form method="post" action="{{ route($activityStoreRoute, $customer) }}" class="activity-form" data-activity-form>
         @csrf
-        @if (request()->boolean('modal'))
-            <input type="hidden" name="modal" value="1">
-        @endif
+        @include('customers._navigation_fields')
         <input type="hidden" name="sales_owner_id" value="{{ $customer->sales_owner_id }}" data-activity-sales-owner-input>
         <label>
             日時
@@ -433,9 +445,7 @@
                 <form id="activity-update-{{ $activity->id }}" method="post" action="{{ route($activityUpdateRoute, [$customer, $activity]) }}" data-activity-form>
                     @csrf
                     @method('patch')
-                    @if (request()->boolean('modal'))
-                        <input type="hidden" name="modal" value="1">
-                    @endif
+                    @include('customers._navigation_fields')
                     <input type="hidden" name="action_at" value="{{ $activity->action_at->format('Y-m-d\TH:i') }}">
                     <input type="hidden" name="user_id" value="{{ $isUserScreen ? auth()->id() : $activity->user_id }}">
                     <input type="hidden" name="sales_owner_id" value="{{ $customer->sales_owner_id }}" data-activity-sales-owner-input>
@@ -494,9 +504,7 @@
                         >
                             @csrf
                             @method('delete')
-                            @if (request()->boolean('modal'))
-                                <input type="hidden" name="modal" value="1">
-                            @endif
+                            @include('customers._navigation_fields')
                             <button class="icon-button danger-icon-button" type="submit" aria-label="履歴を削除" title="履歴を削除">
                                 <img src="{{ asset('images/trash.png') }}" alt="">
                             </button>

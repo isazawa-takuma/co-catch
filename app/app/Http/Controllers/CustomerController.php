@@ -85,6 +85,7 @@ class CustomerController extends Controller
 
         return view($view, [
             'customer' => $customer,
+            'detailQuery' => CustomerQueryService::listContext($request->query()),
             'users' => $this->queryService->activeUsers(),
             'salesUsers' => $this->queryService->activeSalesUsers(),
             'statuses' => Customer::STATUSES,
@@ -265,11 +266,18 @@ class CustomerController extends Controller
 
         $showRoute = $screen === 'user' ? 'user.customers.show' : 'customers.show';
 
+        $context = CustomerQueryService::listContext((array) $request->input('list_context'));
+        foreach (['nav_previous', 'nav_next'] as $key) {
+            $id = $request->input($key);
+            if (is_scalar($id) && ctype_digit((string) $id)) {
+                $context[$key] = (int) $id;
+            }
+        }
         if ($request->boolean('modal')) {
-            return redirect()->route($showRoute, ['customer' => $customer, 'modal' => 1]);
+            $context['modal'] = 1;
         }
 
-        return redirect()->route($showRoute, $customer);
+        return redirect()->route($showRoute, ['customer' => $customer] + $context);
     }
 
     private function redirectToList(Request $request)

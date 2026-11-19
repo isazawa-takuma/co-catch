@@ -4,6 +4,7 @@ namespace App\Services\Opnavi;
 
 use App\Models\Customer;
 use App\Models\User;
+use App\Support\WebUrl;
 use Illuminate\Support\Facades\DB;
 
 class CustomerImportService
@@ -62,43 +63,22 @@ class CustomerImportService
 
     public function import(string $path, string $originalName, bool $confirmDuplicates): array
     {
-        [$headers, $rows] = $this->readCsv($path);
-        $missingColumns = array_values(array_diff(self::REQUIRED_COLUMNS, $headers));
-
-        if ($missingColumns) {
-            return ['errors' => ['CSVの必須列が不足しています: '.implode(', ', $missingColumns)]];
+        $source = $this->readImportRows($path);
+        if ($source['errors']) {
+            return ['errors' => $source['errors']];
         }
 
-        $errors = [];
         $duplicates = [];
         $prepared = [];
-        $skippedShortOpenDays = [];
 
-        foreach ($rows as $line => $row) {
-            if ($this->isBlankImportRow($row)) {
-                continue;
-            }
-
-            if ($this->shouldSkipByOpenDays($row, $line, $skippedShortOpenDays)) {
-                continue;
-            }
-
-            $emptyColumns = $this->emptyRequiredColumns($row);
-            if ($emptyColumns) {
-                $errors[] = $line.'行目: '.implode(', ', $emptyColumns).' が空です';
-                continue;
-            }
-
-            $customerData = $this->mapCsvRowToCustomer($row);
+        foreach ($source['rows'] as $line => $row) {
+            $listings = CsvOtaListings::fromRow($row);
+            $customerData = $this->mapCsvRowToCustomer($row, $listings['count']);
             if ($this->hasDuplicateCustomer($customerData)) {
                 $duplicates[] = $line.'行目: '.$customerData['business_name'].' / '.$customerData['address'];
             }
 
-            $prepared[] = [$customerData, $this->parseOtaLinks($row['OTA_URL（メイン4社）'] ?? '')];
-        }
-
-        if ($errors) {
-            return ['errors' => $errors];
+            $prepared[] = [$customerData, $listings['links']];
         }
 
         if ($duplicates && ! $confirmDuplicates) {
@@ -110,14 +90,38 @@ class CustomerImportService
         $this->savePreparedRows($prepared);
 
         $message = $originalName.'のインポートに成功しました';
-        if ($skippedShortOpenDays) {
-            $message .= '（営業日数12日未満のため'.count($skippedShortOpenDays).'件をスキップしました）';
+        if ($source['warnings']) {
+            $message .= '（営業日数12日未満のため'.count($source['warnings']).'件をスキップしました）';
         }
 
         return [
             'message' => $message,
-            'warnings' => $skippedShortOpenDays,
+            'warnings' => $source['warnings'],
         ];
+    }
+
+    public function readImportRows(string $path): array
+    {
+        [$headers, $rows] = $this->readCsv($path);
+        $missing = array_diff(self::REQUIRED_COLUMNS, $headers);
+        $errors = $missing ? ['CSVの必須列が不足しています: '.implode(', ', $missing)] : [];
+        $warnings = [];
+        $eligible = [];
+        if (! $missing) {
+            foreach ($rows as $line => $row) {
+                if ($this->isBlankImportRow($row) || $this->shouldSkipByOpenDays($row, $line, $warnings)) {
+                    continue;
+                }
+                $empty = $this->emptyRequiredColumns($row);
+                if ($empty) {
+                    $errors[] = $line.'行目: '.implode(', ', $empty).' が空です';
+                } else {
+                    $eligible[$line] = $row;
+                }
+            }
+        }
+
+        return ['rows' => $eligible, 'warnings' => $warnings, 'errors' => $errors];
     }
 
     private function readCsv(string $path): array
@@ -180,7 +184,7 @@ class CustomerImportService
         return $empty;
     }
 
-    private function mapCsvRowToCustomer(array $row): array
+    private function mapCsvRowToCustomer(array $row, int $otaCount): array
     {
         $owner = null;
         if (trim((string) ($row['担当者'] ?? '')) !== '') {
@@ -192,7 +196,6 @@ class CustomerImportService
         }
 
         $domesticOtas = trim((string) ($row['国内掲載OTA'] ?? ''));
-        $otaLinks = $this->parseOtaLinks($row['OTA_URL（メイン4社）'] ?? '');
 
         return [
             'registered_at' => $this->normalizeDate($row['登録日']),
@@ -201,12 +204,12 @@ class CustomerImportService
             'region' => trim($row['地域']),
             'area_name' => trim($row['店舗']),
             'address' => trim($row['住所']),
-            'website_url' => $this->nullable($row['HP_URL'] ?? $row['Web_URL'] ?? $row['web_URL'] ?? ''),
+            'website_url' => WebUrl::optional($row['HP_URL'] ?? $row['Web_URL'] ?? $row['web_URL'] ?? null),
             'head_office_phone' => $this->nullable($row['電話番号（本社）'] ?? ''),
             'public_phone' => $this->nullable($row['電話番号（OTA公開）'] ?? ''),
             'experience_title' => trim($row['体験内容']),
             'domestic_otas' => $domesticOtas,
-            'ota_count' => count($otaLinks) ?: $this->countOtas($domesticOtas),
+            'ota_count' => $otaCount,
             'store_count' => $this->nullableInteger($row['店舗数'] ?? ''),
             'monthly_open_days' => $this->toInteger($row['営業日数(1ヶ月)']),
             'request_booking_status' => trim($row['リクエスト予約']),
@@ -242,28 +245,8 @@ class CustomerImportService
                 foreach ($otaLinks as $link) {
                     $customer->otaLinks()->create($link);
                 }
-                $customer->update(['ota_count' => max(count($otaLinks), (int) $customer->ota_count)]);
             }
         });
-    }
-
-    private function parseOtaLinks(string $value): array
-    {
-        $links = [];
-        $lines = preg_split('/\r\n|\r|\n/', $value);
-
-        foreach ($lines as $line) {
-            $line = trim($line);
-            if ($line === '') {
-                continue;
-            }
-
-            if (preg_match('/^(.+?)[：:]\s*(https?:\/\/\S+)/u', $line, $matches)) {
-                $links[] = ['ota_name' => trim($matches[1]), 'listing_url' => trim($matches[2])];
-            }
-        }
-
-        return $links;
     }
 
     private function normalizeDate(string $value): string
@@ -293,15 +276,6 @@ class CustomerImportService
         }
 
         return null;
-    }
-
-    private function countOtas(string $value): int
-    {
-        if (trim($value) === '') {
-            return 0;
-        }
-
-        return count(array_filter(preg_split('/[,、\s]+/u', $value)));
     }
 
     private function toInteger(string $value): int

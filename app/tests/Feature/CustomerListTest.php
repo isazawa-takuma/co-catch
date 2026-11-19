@@ -450,6 +450,54 @@ class CustomerListTest extends TestCase
         ]);
     }
 
+    public function test_memo_can_be_saved_with_a_missing_or_previously_imported_invalid_website(): void
+    {
+        foreach ([null, '未確認', 'じゃらん'] as $legacy) {
+            $customer = Customer::create($this->customerData(['website_url' => $legacy]));
+            $route = route('customers.show', $customer);
+            $this->get($route)->assertSee('name="website_url" value=""', false)->assertDontSee('Webサイトを開く');
+            $this->patch($route, ['website_url' => $legacy, 'sales_memo' => '保存確認'])->assertSessionHasNoErrors()->assertRedirect($route);
+            $this->assertSame('保存確認', $customer->fresh()->sales_memo);
+            $this->assertNull($customer->fresh()->website_url);
+        }
+    }
+
+    /** @dataProvider detailModes */
+    public function test_saving_preserves_the_filtered_neighbor_even_when_the_memo_no_longer_matches(bool $drawer): void
+    {
+        $user = $this->appointmentUser();
+        $this->actingAs($user);
+        $data = ['sales_memo' => '対象', 'owner_id' => $user->id];
+        $first = Customer::create($this->customerData(['ota_count' => 1] + $data));
+        $other = Customer::create($this->customerData(['ota_count' => 2, 'owner_id' => null] + $data));
+        $next = Customer::create($this->customerData(['ota_count' => 3] + $data));
+        $query = ['keyword' => '対象', 'sort_by' => 'ota_count', 'sort_order' => 'asc'];
+        $headers = $drawer ? ['X-Requested-With' => 'XMLHttpRequest'] : [];
+        $route = route('user.customers.show', $first);
+        $response = $this->get($route.'?'.http_build_query($query + ($drawer ? ['modal' => 1] : [])), $headers);
+        $response->assertOk()->assertSee('name="nav_next" value="'.$next->id.'"', false);
+        $dom = new \DOMDocument();
+        $dom->loadHTML('<?xml encoding="UTF-8">'.$response->getContent(), LIBXML_NOERROR | LIBXML_NOWARNING);
+        $inputs = (new \DOMXPath($dom))->query('//form[@class="detail-form"]//input[@type="hidden"]');
+        $params = [];
+        foreach ($inputs as $input) {
+            $params[] = urlencode($input->getAttribute('name')).'='.urlencode($input->getAttribute('value'));
+        }
+        parse_str(implode('&', $params), $data);
+        $saved = $this->patch($route, $data + ['sales_memo' => '更新しました'], $headers);
+        $saved->assertSessionHasNoErrors();
+        $redirect = $saved->headers->get('Location');
+        $after = $this->get($redirect, $headers)->assertOk();
+        $after->assertViewHas('nextCustomer', fn ($neighbor) => $neighbor?->id === $next->id);
+        $after->assertSee(route('user.customers.show', ['customer' => $next] + $query));
+        $this->get($route.'?nav_next='.$other->id, $headers)->assertViewHas('nextCustomer', fn ($neighbor) => $neighbor === null);
+    }
+
+    public static function detailModes(): array
+    {
+        return ['別タブ' => [false], '一覧の詳細' => [true]];
+    }
+
     public function test_customer_list_marks_status_for_cross_tab_sync(): void
     {
         $customer = Customer::create($this->customerData(['status' => '商談中']));
