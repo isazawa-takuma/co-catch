@@ -355,6 +355,10 @@ textarea {
     color: var(--danger);
 }
 
+[data-drawer-error] {
+    white-space: pre-line;
+}
+
 .toast.warning {
     background: #fffbeb;
     color: #92400e;

@@ -269,7 +269,7 @@ async function openCustomerDrawer(url, customerId) {
         });
 
         if (! response.ok) {
-            throw new Error(await response.text() || '詳細情報の読み込みに失敗しました。時間をおいて再度お試しください。');
+            throw new Error(await drawerFailureMessage(response, '詳細情報を読み込めませんでした。時間をおいて再度お試しください。'));
         }
 
         body.innerHTML = await response.text();
@@ -277,7 +277,7 @@ async function openCustomerDrawer(url, customerId) {
     } catch (error) {
         clearActiveCustomerRow();
         body.innerHTML = '';
-        showDrawerError(body, error.message);
+        showDrawerError(body, error instanceof TypeError ? '通信できませんでした。接続を確認して再度お試しください。' : error.message);
     } finally {
         drawerIsLoading = false;
     }
@@ -1521,18 +1521,25 @@ function initializeDrawerForms(scope) {
                 });
 
                 if (! response.ok) {
-                    throw new Error(await response.text() || '保存に失敗しました。入力内容を確認して、もう一度お試しください。');
+                    showDrawerError(form, await drawerFailureMessage(response, '保存できませんでした。時間をおいて再度お試しください。'));
+                    return;
                 }
 
                 const html = await response.text();
+                const fragment = document.createElement('template');
+                fragment.innerHTML = html;
+                if (! fragment.content.querySelector('[data-current-customer-list-state]')) {
+                    showDrawerError(form, '保存結果を確認できませんでした。別タブでログイン状態と保存内容を確認してください。');
+                    return;
+                }
                 const body = document.querySelector('[data-drawer-body]');
-                body.innerHTML = html;
+                body.replaceChildren(fragment.content);
                 syncActiveCustomerRowStatus(body);
                 initializeDrawerContent(body);
-            } catch (error) {
-                form.dataset.submitting = 'false';
-                showDrawerError(form, error.message);
+            } catch {
+                showDrawerError(form, '保存結果を確認できませんでした。通信状況を確認してください。');
             } finally {
+                form.dataset.submitting = 'false';
                 if (submitButton) {
                     submitButton.disabled = false;
                 }
@@ -1634,16 +1641,38 @@ function closeSalesOwnerModal(modal) {
     modal.hidden = true;
 }
 
+async function drawerFailureMessage(response, fallback) {
+    if (response.status === 422) {
+        const payload = await response.json().catch(() => null);
+        const messages = Object.values(payload?.errors ?? {}).flat()
+            .filter((message) => typeof message === 'string' && message.trim());
+        return [...new Set(messages)].join('\n') || '入力内容を確認して、もう一度お試しください。';
+    }
+    if (response.status === 401 || response.status === 419) {
+        return 'ログインの有効期限が切れました。別タブでログインし直してください。';
+    }
+    if (response.status === 403) {
+        return 'この顧客を操作する権限がありません。';
+    }
+    if (response.status === 404) {
+        return '対象のデータが見つかりません。一覧を再読み込みしてください。';
+    }
+    return fallback;
+}
+
 function showDrawerError(target, message) {
     const scope = target.closest('[data-drawer-body]') || target;
     scope.querySelector('[data-drawer-error]')?.remove();
+    scope.querySelector('.toast.success.in-drawer')?.remove();
 
     const error = document.createElement('div');
     error.className = 'toast error in-drawer';
     error.dataset.drawerError = 'true';
+    error.setAttribute('role', 'alert');
     error.textContent = message;
 
     scope.prepend(error);
+    error.scrollIntoView({ block: 'nearest' });
 }
 
 function initializeSubmitGuards(scope) {

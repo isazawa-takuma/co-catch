@@ -4,16 +4,10 @@ namespace App\Http\Requests;
 
 use App\Models\Customer;
 use App\Support\WebUrl;
-use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-class CustomerUpdateRequest extends FormRequest
+class CustomerUpdateRequest extends CustomerDetailRequest
 {
-    public function authorize(): bool
-    {
-        return true;
-    }
-
     protected function prepareForValidation(): void
     {
         $website = $this->input('website_url');
@@ -30,7 +24,7 @@ class CustomerUpdateRequest extends FormRequest
             'region' => ['sometimes', 'required', 'string', 'max:255'],
             'area_name' => ['sometimes', 'required', 'string', 'max:255'],
             'address' => ['sometimes', 'required', 'string', 'max:255'],
-            'website_url' => ['nullable', 'url', 'regex:~^https?://~i', 'max:1000'],
+            'website_url' => ['bail', 'nullable', 'url', 'regex:~^https?://~i', 'max:1000'],
             'head_office_phone' => ['nullable', 'string', 'max:255'],
             'public_phone' => ['nullable', 'string', 'max:255'],
             'contact_phone' => ['nullable', 'string', 'max:255'],
@@ -44,7 +38,7 @@ class CustomerUpdateRequest extends FormRequest
                 'nullable',
                 Rule::exists('users', 'id')->where(fn ($query) => $query->where('role', 'sales')->where('is_active', true)),
             ],
-            'next_action_at' => ['nullable', 'date', 'after_or_equal:today'],
+            'next_action_at' => $this->nextActionDateRules(),
             'next_action_alert_enabled' => ['nullable', 'boolean'],
             'sales_memo' => ['nullable', 'string'],
             'redirect_to' => ['nullable', 'string'],
@@ -54,7 +48,8 @@ class CustomerUpdateRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'next_action_at.after_or_equal' => '次回アクション日は本日以降の日付を指定してください。',
-        ];
+            'website_url.url' => 'Web URLは http:// または https:// で始まる正しいURLを入力してください。',
+            'website_url.regex' => 'Web URLは http:// または https:// で始まる正しいURLを入力してください。',
+        ] + parent::messages();
     }
 }

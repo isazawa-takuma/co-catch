@@ -10,6 +10,14 @@
     $activityUpdateRoute = $isUserScreen ? 'user.customers.activities.update' : 'customers.activities.update';
     $activityRanks = \App\Models\Activity::RANKS;
     $webUrl = \App\Support\WebUrl::optional($customer->website_url);
+    $basicInput = function ($key, $saved) use ($customer) {
+        if (old('_basic_customer') !== (string) $customer->id) {
+            return $saved;
+        }
+        $value = old($key, $saved);
+        return is_scalar($value) || $value === null ? $value : $saved;
+    };
+    $nextActionValue = $basicInput('next_action_at', $customer->next_action_at?->format('Y-m-d\TH:i'));
     $drawerQuery = array_merge($detailQuery, ['modal' => 1]);
     $nextActionBadge = null;
     if ($customer->next_action_at?->isToday()) {
@@ -73,27 +81,28 @@
         <form method="post" action="{{ route($customerUpdateRoute, $customer) }}" class="detail-form">
             @csrf
             @method('patch')
+            <input type="hidden" name="_basic_customer" value="{{ $customer->id }}">
             @include('customers._navigation_fields')
             <label>
                 事業者名
-                <input type="text" name="business_name" value="{{ $customer->business_name }}" required @readonly($isUserScreen)>
+                <input type="text" name="business_name" value="{{ $basicInput('business_name', $customer->business_name) }}" required @readonly($isUserScreen)>
             </label>
             <label>
                 都道府県
-                <input type="text" name="region" value="{{ $customer->region }}" required @readonly($isUserScreen)>
+                <input type="text" name="region" value="{{ $basicInput('region', $customer->region) }}" required @readonly($isUserScreen)>
             </label>
             <label>
                 店舗
-                <input type="text" name="area_name" value="{{ $customer->area_name }}" required @readonly($isUserScreen)>
+                <input type="text" name="area_name" value="{{ $basicInput('area_name', $customer->area_name) }}" required @readonly($isUserScreen)>
             </label>
             <label class="span-2">
                 住所
-                <input type="text" name="address" value="{{ $customer->address }}" required @readonly($isUserScreen)>
+                <input type="text" name="address" value="{{ $basicInput('address', $customer->address) }}" required @readonly($isUserScreen)>
             </label>
             <label class="span-2">
                 Web URL
                 <span class="input-with-action">
-                    <input type="url" name="website_url" value="{{ $webUrl }}" @readonly($isUserScreen)>
+                    <input type="url" name="website_url" value="{{ $basicInput('website_url', $webUrl) }}" @readonly($isUserScreen)>
                     @if ($webUrl)
                         <a class="button" href="{{ $webUrl }}" target="_blank" rel="noreferrer">Webサイトを開く</a>
                     @endif
@@ -119,7 +128,7 @@
             </div>
             <label>
                 担当者電話番号
-                <input type="text" name="contact_phone" value="{{ $customer->contact_phone }}">
+                <input type="text" name="contact_phone" value="{{ $basicInput('contact_phone', $customer->contact_phone) }}">
             </label>
             <div class="readonly-field-group">
                 <span class="detail-field-label">ステータス</span>
@@ -133,7 +142,7 @@
                 <select name="owner_id" @disabled($isUserScreen)>
                     <option value="">未担当</option>
                     @foreach ($users as $user)
-                        <option value="{{ $user->id }}" @selected($customer->owner_id === $user->id)>{{ $user->name }}</option>
+                        <option value="{{ $user->id }}" @selected((string) $basicInput('owner_id', $customer->owner_id) === (string) $user->id)>{{ $user->name }}</option>
                     @endforeach
                 </select>
             </label>
@@ -150,7 +159,7 @@
                 <label class="next-action-field">
                     次回アクション日
                     <div class="date-time-picker" data-date-time-picker data-min-date="{{ now()->toDateString() }}">
-                        <input type="hidden" name="next_action_at" value="{{ optional($customer->next_action_at)->format('Y-m-d\TH:i') }}" data-date-time-value>
+                        <input type="hidden" name="next_action_at" value="{{ $nextActionValue }}" data-date-time-value>
                         <button
                             class="date-time-picker__trigger"
                             type="button"
@@ -219,15 +228,15 @@
                         name="next_action_alert_enabled"
                         value="1"
                         data-next-action-alert-checkbox
-                        @checked($customer->next_action_alert_enabled && $customer->next_action_at)
-                        @disabled(! $customer->next_action_at)
+                        @checked($basicInput('next_action_alert_enabled', $customer->next_action_alert_enabled) && $nextActionValue)
+                        @disabled(! $nextActionValue)
                     >
                     <span>重要アラート</span>
                 </label>
             </div>
             <label class="span-2">
                 営業メモ
-                <textarea name="sales_memo" rows="4">{{ $customer->sales_memo }}</textarea>
+                <textarea name="sales_memo" rows="4">{{ $basicInput('sales_memo', $customer->sales_memo) }}</textarea>
             </label>
             <div class="span-2">
                 <button class="button primary" type="submit">保存</button>

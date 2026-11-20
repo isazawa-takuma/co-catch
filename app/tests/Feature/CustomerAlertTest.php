@@ -94,6 +94,43 @@ class CustomerAlertTest extends TestCase
         $this->assertNull($customer->next_action_at);
     }
 
+    /** @dataProvider customerScreens */
+    public function test_overdue_date_can_remain_unchanged_but_cannot_be_replaced_with_another_past_time(string $screen): void
+    {
+        $user = $screen === 'admin' ? $this->adminUser() : $this->salesUser();
+        $this->actingAs($user);
+        $past = now()->subDays(2)->setTime(14, 30, 37);
+        $customer = Customer::create($this->customerData([
+            'sales_owner_id' => $user->id,
+            'next_action_at' => $past,
+            'next_action_alert_enabled' => true,
+        ]));
+        $url = "/opnavi/{$screen}/customers/{$customer->id}";
+        $this->patch($url, ['next_action_at' => $past->format('Y-m-d\TH:i'), 'sales_memo' => '保存できた'])
+            ->assertRedirect($url)->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('opnavi_customers', [
+            'id' => $customer->id, 'next_action_at' => $past->toDateTimeString(),
+            'sales_memo' => '保存できた', 'next_action_alert_enabled' => true,
+        ]);
+
+        foreach ([$past->copy()->addMinute(), $past->copy()->addDay(), $past->copy()->addSecond()] as $changed) {
+            $this->patchJson($url, ['next_action_at' => $changed->toDateTimeString(), 'sales_memo' => '保存しない'])
+                ->assertUnprocessable()->assertJsonPath('errors.next_action_at.0', '次回アクション日は本日以降の日付を指定してください。');
+        }
+        $this->assertDatabaseHas('opnavi_customers', [
+            'id' => $customer->id, 'next_action_at' => $past->toDateTimeString(), 'sales_memo' => '保存できた',
+        ]);
+        $this->patch($url, ['next_action_at' => null])->assertSessionHasNoErrors();
+        $this->assertNull($customer->fresh()->next_action_at);
+        $this->assertFalse($customer->fresh()->next_action_alert_enabled);
+        $this->patchJson($url, ['next_action_at' => $past->format('Y-m-d\TH:i')])->assertUnprocessable();
+    }
+
+    public static function customerScreens(): array
+    {
+        return [['admin'], ['user']];
+    }
+
     public function test_customer_alert_endpoint_returns_alerts_five_minutes_before_next_action(): void
     {
         $this->actingAs($this->adminUser());

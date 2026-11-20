@@ -450,6 +450,20 @@ class CustomerListTest extends TestCase
         ]);
     }
 
+    public function test_detail_validation_returns_japanese_field_messages_and_keeps_the_draft_on_redirect(): void
+    {
+        $customer = Customer::create($this->customerData(['sales_memo' => '元のメモ']));
+        $route = route('customers.show', $customer);
+        $draft = ['website_url' => 'ftp://example.com', 'sales_memo' => '未保存のメモ', '_basic_customer' => (string) $customer->id];
+        $message = 'Web URLは http:// または https:// で始まる正しいURLを入力してください。';
+        $this->patchJson($route, $draft + ['owner_id' => -1])->assertUnprocessable()
+            ->assertJsonPath('errors.website_url.0', $message)
+            ->assertJsonPath('errors.owner_id.0', 'コール担当の選択内容を確認してください。');
+        $this->from($route)->patch($route, $draft)->assertRedirect($route)->assertSessionHasErrors('website_url');
+        $this->get($route)->assertOk()->assertSee($message)->assertSee('未保存のメモ')->assertSee('value="ftp://example.com"', false);
+        $this->assertSame('元のメモ', $customer->fresh()->sales_memo);
+    }
+
     public function test_memo_can_be_saved_with_a_missing_or_previously_imported_invalid_website(): void
     {
         foreach ([null, '未確認', 'じゃらん'] as $legacy) {

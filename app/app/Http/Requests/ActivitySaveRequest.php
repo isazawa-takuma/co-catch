@@ -4,16 +4,10 @@ namespace App\Http\Requests;
 
 use App\Models\Activity;
 use App\Models\Customer;
-use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-class ActivitySaveRequest extends FormRequest
+class ActivitySaveRequest extends CustomerDetailRequest
 {
-    public function authorize(): bool
-    {
-        return true;
-    }
-
     public function rules(): array
     {
         $allowedStatuses = array_values(array_unique(array_merge(Activity::STATUSES, Customer::STATUSES)));
@@ -39,6 +33,6 @@ class ActivitySaveRequest extends FormRequest
         return [
             'sales_owner_id.required' => 'APOの履歴を登録する場合は営業担当を選択してください。',
             'sales_owner_id.exists' => '有効な営業担当を選択してください。',
-        ];
+        ] + parent::messages();
     }
 }
